@@ -1,4 +1,15 @@
+
+- [Lab 1) Kubernetesクラスターへのアプリケーションデプロイ](#lab-1-kubernetesクラスターへのアプリケーションデプロイ)
+  - [1. K8sクラスターへのアプリケーションデプロイ](#1-k8sクラスターへのアプリケーションデプロイ)
+  - [2. アプリの公開](#2-アプリの公開)
+    - [killercoda編  (NodePortでのサービス公開)](#killercoda編--nodeportでのサービス公開)
+    - [IKS編 -  (Ingressでのサービス公開)](#iks編----ingressでのサービス公開)
+  - [最後に](#最後に)
+
+
 # Lab 1) Kubernetesクラスターへのアプリケーションデプロイ
+
+
 Kubernetesクラスターへのアプリケーションのデプロイ方法を学びます。
 
 Lab1〜3ではWebサイトのゲストブック機能を提供するシンプルなWebアプリケーション(guestbook)を使用します。
@@ -9,6 +20,8 @@ Lab1〜3ではWebサイトのゲストブック機能を提供するシンプル
 `guestbook` アプリケーションをK8sクラスターにデプロイします。  
 使用するアプリは`ibmcom/guestbook:v1` という名前で，ビルド済のDockerイメージがDockerHub上にアップロード済です。
 
+
+
 1. `guestbook`を実行します。 `kubectl create deployment guestbook --image=ibmcom/guestbook:v1`
 
 ​	実行例:
@@ -18,16 +31,18 @@ $ kubectl create deployment guestbook --image=ibmcom/guestbook:v1
 deployment.apps/guestbook created
 ```
 
+
+
 2. デプロイしたアプリのステータスを確認します。
-	`kubectl get pods`
-	Podのステータスが「実行中(Running)」になったら，OKです。
-	
-	実行例：
-	```bash
-	$ kubectl get pods
-	NAME                         READY   STATUS    RESTARTS   AGE
-	guestbook-747778c876-57vrl   1/1     Running   0          14s
-	```
+  `kubectl get pods`
+  Podのステータスが「実行中(Running)」になったら，OKです。
+
+  実行例：
+  ```bash
+  $ kubectl get pods
+  NAME                         READY   STATUS    RESTARTS   AGE
+  guestbook-747778c876-57vrl   1/1     Running   0          14s
+  ```
 
 >補足:  
 > アプリケーションの実行ステータスを確認してみましょう。
@@ -63,6 +78,8 @@ deployment.apps/guestbook created
 > replicaset.apps/guestbook-75786d799f   1         1         1       7m
 > ```
 
+
+
 ## 2. アプリの公開
 
 ワーカーノードのIPを介して外部からアクセスできるようにするために， **Deployment**を**Service**を使用して公開します。
@@ -83,6 +100,8 @@ K8sクラスターの外からも`guestbook`にアクセスできるようアプ
 
 killercodaではNodePortがサポートされているので、そちらを利用してアプリを公開します
 
+
+
 1. 以下の手順で `guestbook` アプリケーションが3000番ポートでLISTENするようにします。
 
    実行例:
@@ -96,6 +115,8 @@ killercodaではNodePortがサポートされているので、そちらを利�
    > - **Service**: K8sリソースの一つです。K8sクラスター内のPod間通信を制御したり，外部からのリクエストを適切なPodにルーティングさせるなどの役割を担います。`Service`の種類には、`NodePort`，`LoadBalancer`，`ClusterIP`などがあります。
    > 
    > 今回はK8sクラスターの単一のワーカーノードのIPアドレスを宛先として外部公開する方法を定義しています。(`--type=NodePort`)
+
+   
 
 2. ワーカー・ノードで`guestbook`アプリを公開しているポート番号を調べるために，Service情報を取得します。
 
@@ -113,9 +134,11 @@ killercodaではNodePortがサポートされているので、そちらを利�
    > `3000:31454`の表記は，Podが31454ポートで外部公開され，内部的に3000ポートにフォワードされることを表しています。
    > 外部公開するポート番号は任意に指定することも可能です。指定がない場合、IKSでは30000 〜 32767番のポートが自動的に割り当てられます。
 
+   
+
 3. 実際にアプリにアクセスします
 
-​	３の手順で取得したポート番号（NodePort）を使用してアプリケーションにアクセスします。
+​	2の手順で取得したポート番号（NodePort）を使用してアプリケーションにアクセスします。
 
 ​	killercodaの右上メニュから **Traffic / Ports** をクリックします
 
@@ -134,6 +157,8 @@ killercodaではNodePortがサポートされているので、そちらを利�
 ### IKS編 -  (Ingressでのサービス公開)
 
 IBM Cloud Kubernetes ServiceのVPCクラスターではHTTPSでのセキュアなアプリ公開が行えるIngressが利用できるためそちらで公開します
+
+
 
 1. まずはクラスター内でのみ呼び出し可能なサービスを作成します
 
@@ -268,7 +293,9 @@ IBM Cloud Kubernetes ServiceのVPCクラスターではHTTPSでのセキュア�
    
    ```
 
-6. 実際にアプリにアクセスします
+   
+
+5. 実際にアプリにアクセスします
 
    Ingress Subdomainにアクセスしてみます
 
@@ -301,6 +328,8 @@ IBM Cloud Kubernetes ServiceのVPCクラスターではHTTPSでのセキュア�
 以上でサンプルアプリケーション`guestbook`をK8sクラスター上にデプロイし，外部からアクセス可能な状態にできました。
 
 
+
+## 最後に
 
 次のハンズオンはこちら [Lab2](../Lab2/README.md) です。
 

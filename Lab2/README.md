@@ -1,3 +1,14 @@
+- [Lab 2) アプリケーションのスケーリング と アップデート\&ロールバック](#lab-2-アプリケーションのスケーリング-と-アップデートロールバック)
+  - [0. Lab環境作成](#0-lab環境作成)
+    - [killercodaの方  (NodePortでのサービス公開)](#killercodaの方--nodeportでのサービス公開)
+    - [IKSの方 -  (Ingressでのサービス公開)](#iksの方----ingressでのサービス公開)
+  - [1. レプリカ数(replica)の指定によるアプリケーションのスケーリング](#1-レプリカ数replicaの指定によるアプリケーションのスケーリング)
+  - [2. アプリケーションのアップデートとロールバック](#2-アプリケーションのアップデートとロールバック)
+  - [3. v2のコンテナイメージへのアップデート](#3-v2のコンテナイメージへのアップデート)
+  - [4. v1のコンテナイメージへのロールバック](#4-v1のコンテナイメージへのロールバック)
+  - [最後に](#最後に)
+
+
 # Lab 2) アプリケーションのスケーリング と アップデート&ロールバック
 
 Lab2では，「アプリケーションのスケーリング」と「アップデート&ロールバック」する方法を学びます。  
@@ -29,40 +40,40 @@ $ kubectl get svc nginx
 
 1. 以下コマンドを実行し、環境を作成します。
 
-```bash
-# cluster名を定義
-$ CLUSTER_NAME=mycluster
+  ```bash
+  # cluster名を定義
+  $ CLUSTER_NAME=mycluster
 
-# アプリのデプロイ
-kubectl create deployment guestbook --image=ibmcom/guestbook:v1
+  # アプリのデプロイ
+  kubectl create deployment guestbook --image=ibmcom/guestbook:v1
 
-# サービス公開のために、クラスターに割り当てられたIngress Subdomain、Ingress Secretの確認
-$ ibmcloud ks cluster get --cluster $CLUSTER_NAME
+  # サービス公開のために、クラスターに割り当てられたIngress Subdomain、Ingress Secretの確認
+  $ ibmcloud ks cluster get --cluster $CLUSTER_NAME
 
-# サービス公開
-cat <<EOF | kubectl apply -f -
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: guestbook
-spec:
-  tls:
-    - hosts:
-        - {Ingress Subdomainの値を記載してください}
-      secretName: {Ingress Secretの値を記載してください}
-  rules:
-    - host: {Ingress Subdomainの値を記載してください}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: guestbook
-                port:
-                  number: 3000
-EOF
-```
+  # サービス公開
+  cat <<EOF | kubectl apply -f -
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    name: guestbook
+  spec:
+    tls:
+      - hosts:
+          - {Ingress Subdomainの値を記載してください}
+        secretName: {Ingress Secretの値を記載してください}
+    rules:
+      - host: {Ingress Subdomainの値を記載してください}
+        http:
+          paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: guestbook
+                  port:
+                    number: 3000
+  EOF
+  ```
 
 2. Ingress Subdomainにアクセスしアプリにアクセス、表示されることを確認しあす。
 
@@ -74,17 +85,22 @@ EOF
 K8sでは`ReplicaSet` によって，Pod(Deployment)の複製が可能です。
 
 1. `kubectl` CLI には `scale` というサブコマンドがあり、これを使うと既存のDeployment数を変更できます。  
-現在は1インスタンスで動作している `guestbook` を 10インスタンスで動作するように複製してみましょう。
+  	
+  現在は1インスタンスで動作している `guestbook` を 10インスタンスで動作するように複製してみましょう。
 
-    実行例:
+  
 
-    ```bash
-    $ kubectl scale --replicas=10 deployment guestbook
-    deployment.extensions/guestbook scaled
-    ```
+   実行例:
 
-   >補足:  
-   > Kubernetesのコントローラは，宣言された値(`desired state`，この場合は`--replicas=10`)を満たすように動きます。今回のケースでは，既に1つのインスタンスが動作しているため，9つの新しいPodを作成することで，10インスタンスという`desired state` を満たすように動作することになります。
+   ```bash
+   $ kubectl scale --replicas=10 deployment guestbook
+   deployment.extensions/guestbook scaled
+   ```
+
+  >補足:  
+  > Kubernetesのコントローラは，宣言された値(`desired state`，この場合は`--replicas=10`)を満たすように動きます。今回のケースでは，既に1つのインスタンスが動作しているため，9つの新しいPodを作成することで，10インスタンスという`desired state` を満たすように動作することになります。
+
+  
 
 2. スケーリング(ロールアウト)していく様子を以下のコマンドで確認してみましょう。
 
@@ -105,6 +121,8 @@ K8sでは`ReplicaSet` によって，Pod(Deployment)の複製が可能です。
     Waiting for deployment "guestbook" rollout to finish: 9 of 10 updated replicas are available...
     deployment "guestbook" successfully rolled out
     ```
+
+    
 
 3. Podの動作状況を次のコマンドで確認します。
 
@@ -136,7 +154,10 @@ K8sでは`ReplicaSet` によって，Pod(Deployment)の複製が可能です。
     > 
     > ![HA with more clusters and regions](images/cluster_ha_roadmap.png)
 
+
+
 ## 2. アプリケーションのアップデートとロールバック
+
 K8sは，アプリケーションを新しいバージョンのコンテナイメージにローリングアップデートする機能を提供します。  
 これにより動作中のコンテナイメージを無停止でアップデートしたり，問題が起きた場合に前のバージョンに戻すロールバックを簡易に実現できます。
 
@@ -149,19 +170,24 @@ K8sは，アプリケーションを新しいバージョンのコンテナイ�
 - v1からv2のコンテナイメージへのアップデート
 - v2からv1のコンテナイメージへのロールバック
 
-## v2のコンテナイメージへのアップデート
+
+
+## 3. v2のコンテナイメージへのアップデート
+
 1. `kubectl` コマンドと `set` サブコマンドを使用して，`v2` のイメージを使用するように Deploymentをアップデートします。 
 
     実行例:
-    
+
     ```bash
     $ kubectl set image deployment/guestbook guestbook=ibmcom/guestbook:v2
     deployment.extensions/guestbook image updated
     ```
 
+    
+
 2. 古いDeploymentが削除され，新しいバージョンにアップデートされていく様子を以下のコマンドで確認します。
 
-    `$ kubectl rollout status deployment/guestbook`
+   `$ kubectl rollout status deployment/guestbook`
 
    ```bash
    $ kubectl rollout status deployment/guestbook
@@ -199,26 +225,33 @@ K8sは，アプリケーションを新しいバージョンのコンテナイ�
     Waiting for deployment "guestbook" rollout to finish: 9 of 10 updated replicas are available...
     deployment "guestbook" successfully rolled out
    ```
-   
+
    >補足:  
    >上記の出力はv2のコンテナイメージに置き換わっている間に出力されるものです。v2のコンテナイメージ適用が完全に終了した後に`$ kubectl rollout status xxx`を実行した場合は，`deployment "guestbook" successfully rolled out`とだけ表示されます。
+
+   
 
 3. ブラウザ上でアプリケーションの動作を確認します。
 
     ブラウザでアプリを開きます
-    
+
     >補足:  
     > アプリへのアクセス方法はが不明な方はLab1を参照してください。
-    
+
     guestbook アプリの "v2" が動作していることを確認してください。
     下図のように，ページタイトルの文字列が `Guestbook - v2` に変更されているはずです。
-    
+
     V2に切り替わらない場合は、キャッシュをクリアしてみてください。
-    
+
     ![guestbook-v2 application in browser](images/guestbook-in-browser-v2.png)
 
-## v1のコンテナイメージへのロールバック
+
+
+## 4. v1のコンテナイメージへのロールバック
+
 v2のコンテナイメージに置き換わりましたが、再度v1のイメージにロールバックさせます。
+
+
 
 1. 直前の状態(v1のコンテナイメージ)にロールバックします。
 
@@ -226,6 +259,8 @@ v2のコンテナイメージに置き換わりましたが、再度v1のイメ�
     $ kubectl rollout undo deployment guestbook
     deployment.extensions/guestbook
     ```
+
+    
 
 2. v2のコンテナからv1のコンテナにロールアウトしていく様子を確認します。
 
@@ -265,27 +300,29 @@ v2のコンテナイメージに置き換わりましたが、再度v1のイメ�
     Waiting for deployment "guestbook" rollout to finish: 9 of 10 updated replicas are available...
     deployment "guestbook" successfully rolled out
     ```
-   
+
     >補足:  
     >先ほどと同様，完全にロールアウトが完了した後に`$ kubectl rollout status xxx`を実行すると，`deployment "guestbook" successfully rolled out`とだけ表示されます。
-   
-5. 最終的に動作しているPod(v1のコンテナ群)を管理している `ReplicaSet` を確認します。
+
+    
+
+3. 最終的に動作しているPod(v1のコンテナ群)を管理している `ReplicaSet` を確認します。
 
     異なるバージョンのコンテナイメージを適用してロールアウト実行する際に，K8sリソースの一つである `ReplicaSet` が使用されています。
-    
+
     ```bash
     $ kubectl get replicasets -l app=guestbook
     NAME                   DESIRED   CURRENT   READY   AGE
     guestbook-58d97f854    0         0         0       28m
     guestbook-75786d799f   10        10        10      30m
     ```
-    
+
     READYが0の`ReplicaSet`と10の`ReplicaSet`の2つが表示されました。
     上記の例の場合は，
     `guestbook-75786d799f` がv1のコンテナイメージを指定しているグループのReplicaSetです。
-    
+
     `ibmcom/guestbook:v1`の指定箇所は，以下のように `kubectl describe`を使って詳細情報から得られます。
-    
+
     ```bash
     $ kubectl describe replicasets guestbook-75786d799f
     .
@@ -310,7 +347,13 @@ v2のコンテナイメージに置き換わりましたが、再度v1のイメ�
     > Kubernetesには，様々なK8sリソースが存在します。(Pod/ReplicaSet/Deployment/Service etc..)
     > Lab2では，Deploymentというリソースが，2種類のReplicaSet(v1コンテナ群を管理するものと，v2コンテナ群を管理するもの)のライフサイクル管理をしてくれていました。そしてそのReplicaSetがguestbookコンテナの動くPodを管理しています。
 
+
+
 以上で「アプリケーションのスケーリング」および「アップデート & ロールバック」の操作は完了です。
+
+
+
+## 最後に
 
 最後に， **Lab2で作成したK8sリソースを以下のコマンドで削除** します。
 
@@ -323,8 +366,10 @@ $ kubectl delete service guestbook
   # IKSの場合は追加でIngressを削除
 $ kubectl delete ingress guestbook
 
-# 3) 確認する
+#3) 確認する
 $ kubectl get pods  
   ```
+
+
 
 次のハンズオンはこちら [Lab3](../Lab3/README.md) です。

@@ -1,3 +1,18 @@
+- [Lab 3) マニフェストファイルの使用とRedisデータベースコンテナとの連携](#lab-3-マニフェストファイルの使用とredisデータベースコンテナとの連携)
+  - [0. 事前準備 (リポジトリのクローン)](#0-事前準備-リポジトリのクローン)
+  - [1. マニフェストファイルを使用したアプリケーションのデプロイとスケーリング](#1-マニフェストファイルを使用したアプリケーションのデプロイとスケーリング)
+    - [まずは，`guestbook`アプリケーションの`deployment`の構成を見てみましょう。](#まずはguestbookアプリケーションのdeploymentの構成を見てみましょう)
+    - [マニフェストファイルのレプリカ数を編集してPodをスケーリングさせてみましょう。](#マニフェストファイルのレプリカ数を編集してpodをスケーリングさせてみましょう)
+    - [次に，guestbookアプリケーションのserviceの構成を見てみましょう。](#次にguestbookアプリケーションのserviceの構成を見てみましょう)
+    - [ブラウザでアプリにアクセスしてみよう](#ブラウザでアプリにアクセスしてみよう)
+  - [2. Redisコンテナを追加してguestbookアプリケーションと連携させる](#2-redisコンテナを追加してguestbookアプリケーションと連携させる)
+    - [Redis Masterデータベースのdeploymentを作成しましょう。](#redis-masterデータベースのdeploymentを作成しましょう)
+    - [guestbookアプリケーションからRedis Masterデータベースに接続できるようにserviceを公開しましょう。](#guestbookアプリケーションからredis-masterデータベースに接続できるようにserviceを公開しましょう)
+    - [複数のguestbookアプリケーションが同一のRedisデータベースを使うことで永続化できることを確認しましょう](#複数のguestbookアプリケーションが同一のredisデータベースを使うことで永続化できることを確認しましょう)
+    - [`redis-slave` という名前のRedisデータベースを追加して，読み/書きの役割を複数のRedisで使い分けるように構成する](#redis-slave-という名前のredisデータベースを追加して読み書きの役割を複数のredisで使い分けるように構成する)
+  - [最後に](#最後に)
+
+
 # Lab 3) マニフェストファイルの使用とRedisデータベースコンテナとの連携
 Lab3では，マニフェストファイルを使用して宣言的にアプリケーションをデプロイする方法を学びます。  
 また，複数のコンテナを連携させて利用する方法も学びます。
@@ -14,18 +29,25 @@ Lab 3では大きく以下の2つを体験します。
 - **1. マニフェストファイルを使用したアプリケーションのデプロイとスケーリング**
 - **2. Redisコンテナを追加し`guestbook`アプリケーションと連携**
 
+
+
 ## 0. 事前準備 (リポジトリのクローン)
+
 まずはソースコードをGitHubからクローンして，該当ディレクトリに移動してください。
 複数バージョンの`guestbook`アプリケーションをKubernetes上にデプロイするためのマニフェストファイル(.yaml)を配置しています。
 
-```bash
-マニフェストファイルが用意されているリポジトリのクローンとディレクトリ移動
 
+
+```bash
+#マニフェストファイルが用意されているリポジトリのクローンとディレクトリ移動
 $ git clone https://github.com/cloud-handson/guestbook.git
 $ cd guestbook/v1
 ```
 
+
+
 ## 1. マニフェストファイルを使用したアプリケーションのデプロイとスケーリング
+
 ここでは以下の3つの操作を実施します。
 
 - `guestbook-deployment.yaml` を使って `guestbook-v1`という名前のdeploymentを作成しアプリケーションをデプロイする (replicas=3 指定済)
@@ -74,6 +96,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   >補足:  
   > Kubernetesオブジェクトを作成する際には，yamlファイル内で`apiVersion`や`kind`，`metadata`，`name`，`labels`，`namespace`などを指定します。今回のようにdeploymentオブジェクトを生成する際は`kind: Deployment`のように指定します。他にも`Service`や`Pod`，`ConfigMap`，その他Kubernetesリソースの種類を指定することでマニフェストファイルから各種オブジェクトを作成できます。
 
+
+
 2. `guestbook`の`deployment`オブジェクトを作成します。  
 
   上記で確認したマニフェストファイルを使用して`deployment`を作成します。  
@@ -85,6 +109,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   $ kubectl create -f guestbook-deployment.yaml
   deployment.apps/guestbook-v1 created
   ```
+
+
 
 3. ラベル(`label`)が `app=guestbook` であるPod一覧を表示します。  
     生成済の全てのPodの中から，labelが "app" で，その値が "guestbook" であるPodを一覧表示させてみます。
@@ -103,10 +129,12 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   >補足1:
   >先ほど確認したマニフェストファイルには`labels: `表記が2ヶ所にありますが，それぞれdeploymentを区別するためのlabelとpodを区別するためのlabelとなっています。今回は`kubectl get pods`コマンドを実行しているためpodのlabelが`app=guestbook`となっているものが返ってきます。  
 
+
+
 ### マニフェストファイルのレプリカ数を編集してPodをスケーリングさせてみましょう。
 
 
-4. マニフェストファイルを変更してPodをスケーリングさせてみましょう。
+1. マニフェストファイルを変更してPodをスケーリングさせてみましょう。
 
   **guestbook/v1/guestbook-deployment.yaml** を任意のエディタで開いて `spec.replicas` の値を `replicas: 5` に変更します。
   Terminalで操作されている場合には `vi guestbook-deployment.yaml` を実行することで内容を編集することができます。編集を開始する場合にはiを入力し[INSERT]モードにし、保存する場合は[Esc]キーを押し、:wq!を入力します。
@@ -121,7 +149,9 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   ...
   ```
 
-5. 変更内容をクラスターに反映させます。
+
+
+2. 変更内容をクラスターに反映させます。
 
   実行例:
 
@@ -131,7 +161,9 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   deployment.apps/guestbook-v1 configured
   ```
 
-6. 再度，Pod一覧を表示します。
+
+
+3. 再度，Pod一覧を表示します。
 
   実行例:
 
@@ -183,9 +215,10 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   > 上記の例のようにレプリカ数3の状態になったことが確認できるはずです。
 
 
+
 ### 次に，guestbookアプリケーションのserviceの構成を見てみましょう。
 
-7. ServiceのYamlをを任意のエディタで開きます。  
+1. ServiceのYamlをを任意のエディタで開きます。  
 
    killercodaの方：**guestbook/v1/guestbook-service-killercoda.yaml**
 
@@ -214,132 +247,141 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
 
 > さらに上記では`type: NodePort`とすることで外部からアクセスが可能になるよう設定しています。
 
-8. `guestbook-v1`deploymentを作成した時と同じコマンドを使って，`guestbook-service`serviceを作成しましょう。
 
-​	**killercodaの方**
+
+2. `guestbook-v1`deploymentを作成した時と同じコマンドを使って，`guestbook-service`serviceを作成しましょう。
+
+  **killercodaの方**
+  
+  以下のコマンドを実行し、Serviceを作成しましょう。
+  
   ```bash
   $ kubectl create -f guestbook-service-killercoda.yaml
   service/guestbook created
   ```
 
-​	**IKSの方**
+  **IKSの方**
 
-​	IKSではHTTPSでのセキュアなアクセスをサポートしているため、Ingressを利用してアプリを公開します。
+  IKSではHTTPSでのセキュアなアクセスをサポートしているため、Ingressを利用してアプリを公開します。
+  
+  Clusterに割り当てられたIngress SubdomainやSecretを確認し、Yamlを修正したのち、Serviceを作成しましょう。
+  
+  1. Clusterに割り当てられたIngress SubdomainやSecretを確認します。
 
-​	Clusterに割り当てられたIngress SubdomainやSecretを確認し、Yamlを修正したのち、Serviceを作成しましょう。
+  ```:bash
+  # cluster名を定義
+  $ CLUSTER_NAME=mycluster
 
-   1. Clusterに割り当てられたIngress SubdomainやSecretを確認します。
+  # アプリのデプロイ
+  kubectl create deployment guestbook --image=ibmcom/guestbook:v1
 
-      ```:bash
-      # cluster名を定義
-      $ CLUSTER_NAME=mycluster
-      
-      # アプリのデプロイ
-      kubectl create deployment guestbook --image=ibmcom/guestbook:v1
-      
-      # サービス公開のために、クラスターに割り当てられたIngress Subdomain、Ingress Secretの確認
-      $ ibmcloud ks cluster get --cluster $CLUSTER_NAME
-      ```
+  # サービス公開のために、クラスターに割り当てられたIngress Subdomain、Ingress Secretの確認
+  $ ibmcloud ks cluster get --cluster $CLUSTER_NAME
+  ```
+    
+    
+  2. 任意のエディタで`guestbook-service-killercoda.yaml`を開きます。
+   
+   Ingressの定義箇所の３個所をそれぞれIngress Subdomain, Ingress Secretの値に書き換えます。
 
-   1. 任意のエディタで`guestbook-service-killercoda.yaml`を開きます。
+  ```:yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: guestbook
+    labels:
+      app: guestbook
+  spec:
+    ports:
+    - port: 3000
+      targetPort: http-server
+    selector:
+      app: guestbook
+    type: ClusterIP
+  
+  ---
+  
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    name: guestbook
+  spec:
+    tls:
+      - hosts:
+          - {Ingress Subdomainの値を記載してください}
+        secretName: {Ingress Secretの値を記載してください}
+    rules:
+      - host: {Ingress Subdomainの値を記載してください}
+        http:
+          paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: guestbook
+                  port:
+                    number: 3000
+  ```
+    
+  3. 最後に、以下コマンドを実行しサービスを作成しましょう
 
-    Ingressの定義箇所の３個所をそれぞれIngress Subdomain, Ingress Secretの値に書き換えます。
-      
-      ```:yaml
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: guestbook
-        labels:
-          app: guestbook
-      spec:
-        ports:
-        - port: 3000
-          targetPort: http-server
-        selector:
-          app: guestbook
-        type: ClusterIP
-      
-      ---
-      
-      apiVersion: networking.k8s.io/v1
-      kind: Ingress
-      metadata:
-        name: guestbook
-      spec:
-        tls:
-          - hosts:
-              - {Ingress Subdomainの値を記載してください}
-            secretName: {Ingress Secretの値を記載してください}
-        rules:
-          - host: {Ingress Subdomainの値を記載してください}
-            http:
-              paths:
-                - path: /
-                  pathType: Prefix
-                  backend:
-                    service:
-                      name: guestbook
-                      port:
-                        number: 3000
-      ```
+  ```bash
+  $ kubectl create -f guestbook-service-iks.yaml
+  service/guestbook created
+  ```
 
-   1. yaml
-      ```bash
-      $ kubectl create -f guestbook-service-iks.yaml
-      service/guestbook created
-      ```
+### ブラウザでアプリにアクセスしてみよう
 
-      
-      
 1. ブラウザ上でguestbookアプリにアクセスし動作をテストします。
 
-    > 補足
-    >
-    > **killercodaをご利用の場合 (NodePortでのサービス公開)**
-    >
-    > 1. `kubectl get service guestbook`を実行し、NodePortのPortを確認します。
-    >
-    > 2. killercodaの画面にて、メニュー＞Trafficを開き、Custom PortsにNode PortのPortを指定しアプリにアクセス、表示されることを確認します。
-    >
-    > 詳細な方法はLab1を参照してください。
-    >
-    > **IKSをご利用の場合 -  (Ingressでのサービス公開)**
-    >
-    > `ibmcloud ks cluster get --cluster $CLUSTER_NAME`を実行し、Clusterに割り当てられたIngress Subdomainにてアクセスを行ってください
-    
+  > 補足
+  >
+  > **killercodaをご利用の場合 (NodePortでのサービス公開)**
+  >
+  > 1. `kubectl get service guestbook`を実行し、NodePortのPortを確認します。
+  >
+  > 2. killercodaの画面にて、メニュー＞Trafficを開き、Custom PortsにNode PortのPortを指定しアプリにアクセス、表示されることを確認します。
+  >
+  > 詳細な方法はLab1を参照してください。
+  >
+  > **IKSをご利用の場合 -  (Ingressでのサービス公開)**
+  >
+  > `ibmcloud ks cluster get --cluster $CLUSTER_NAME`を実行し、Clusterに割り当てられたIngress Subdomainにてアクセスを行ってください
+
 2. guestbook アプリの "v1" が動作していることを確認してください。
 
-    ![guestbook-v1-lab3 application in browser](images/guestbook-in-browser-v1-lab3.png)
+  ![guestbook-v1-lab3 application in browser](images/guestbook-in-browser-v1-lab3.png)
 
-以上の操作で，マニフェストファイル(yaml)で`deployment(guestbook-v1)`と`service(guestbook)`をKubernetes上に展開し，さらに外部からアクセス可能なguestbookアプリケーションを動作させることができました。またyamlを編集することで，Kubernetesが`desired state (宣言的に指定した状態)`を維持させるように動作することを確認できました。
+  以上の操作で，マニフェストファイル(yaml)で`deployment(guestbook-v1)`と`service(guestbook)`をKubernetes上に展開し，さらに外部からアクセス可能なguestbookアプリケーションを動作させることができました。またyamlを編集することで，Kubernetesが`desired state (宣言的に指定した状態)`を維持させるように動作することを確認できました。
 
-> 補足:  
-> Kubernetesが`desired state`を維持するように動作していることを別の角度から確認することもできます。
->
-> Deployment作成時に使用したマニフェストファイルでは，常に3つのアクティブなPodが動作するよう動くよう設定していますが，もし障害が起こってPodが落ちてしまったときに，どのような挙動をするのかみてみましょう。  
->  
-> 稼働中のPodを意図的に削除することで擬似的に障害を生じさせます。  
-> 稼働中のPod名のうち1つを選択し(今回の例では`guestbook-v1-7fc76dc46-dcjwg`)，これを引数として以下のコマンドを実行します。
->
-> ```bash
-> $ kubectl delete pod guestbook-v1-7fc76dc46-dcjwg
-> pod "guestbook-v1-7fc76dc46-dcjwg" deleted
-> ```
->
-> 再度Podの一覧を表示してみます。
->
-> ```bash
-> $ kubectl get pods -l app=guestbook
-> NAME                           READY   STATUS    RESTARTS   AGE
-> guestbook-v1-7fc76dc46-mdzbk   1/1     Running   0          5s
-> guestbook-v1-7fc76dc46-f7tzx   1/1     Running   0          31m
-> guestbook-v1-7fc76dc46-zgckk   1/1     Running   0          31m
-> ```
->
-> `AGE`が他の2つに比べて新しいPodが表示されるはずです。これは，Podの削除後，新たに作られたものです。
-> このようにKubernetesは，常にクラスターの状態を監視し，Deploymentで定義された`desired state`になっているかをチェックしています。そして，状態の差分が見つかると`desired state`を満たすよう動きます。
-> 今回の場合はPodを1つ削除したことにより`desired state`である`replicas=3`が満たせなくなったため，すぐに新規にPodを1つ生成したというわけです。
+  > 補足:  
+  > Kubernetesが`desired state`を維持するように動作していることを別の角度から確認することもできます。
+  >
+  > Deployment作成時に使用したマニフェストファイルでは，常に3つのアクティブなPodが動作するよう動くよう設定していますが，もし障害が起こってPodが落ちてしまったときに，どのような挙動をするのかみてみましょう。  
+  >  
+  > 稼働中のPodを意図的に削除することで擬似的に障害を生じさせます。  
+  > 稼働中のPod名のうち1つを選択し(今回の例では`guestbook-v1-7fc76dc46-dcjwg`)，これを引数として以下のコマンドを実行します。
+  >
+  > ```bash
+  > $ kubectl delete pod guestbook-v1-7fc76dc46-dcjwg
+  > pod "guestbook-v1-7fc76dc46-dcjwg" deleted
+  > ```
+  >
+  > 再度Podの一覧を表示してみます。
+  >
+  > ```bash
+  > $ kubectl get pods -l app=guestbook
+  > NAME                           READY   STATUS    RESTARTS   AGE
+  > guestbook-v1-7fc76dc46-mdzbk   1/1     Running   0          5s
+  > guestbook-v1-7fc76dc46-f7tzx   1/1     Running   0          31m
+  > guestbook-v1-7fc76dc46-zgckk   1/1     Running   0          31m
+  > ```
+  >
+  > `AGE`が他の2つに比べて新しいPodが表示されるはずです。これは，Podの削除後，新たに作られたものです。
+  > このようにKubernetesは，常にクラスターの状態を監視し，Deploymentで定義された`desired state`になっているかをチェックしています。そして，状態の差分が見つかると`desired state`を満たすよう動きます。
+  > 今回の場合はPodを1つ削除したことにより`desired state`である`replicas=3`が満たせなくなったため，すぐに新規にPodを1つ生成したというわけです。
+
+
 
 ## 2. Redisコンテナを追加してguestbookアプリケーションと連携させる
 
@@ -360,6 +402,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
 - `redis-master-service.yaml` を使って `redis-master`という名前のserviceを作成し他のPodからアクセス可能な状態にする
 - 複数のguestbookアプリケーションが同一のRedisデータベースに接続することでデータを永続化できることを確認する
 - `redis-slave` という名前のRedisデータベースを追加して，読み/書きの役割を複数のRedis間で使い分けられるように構成する
+
+
 
 ### Redis Masterデータベースのdeploymentを作成しましょう。
 
@@ -398,6 +442,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   このyamlは，'redis-master' という名前のDeploymentオブジェクトを作成し，Redisデータベースを生成しています。まずはシングルインスタンスで作成したいので，レプリカ数は1に設定しています。
   コンテナイメージは，'redis:2.8.23' を使用し，デフォルトのRedisポート番号である6379番で公開するよう設定しています。
 
+
+
 2. Redis MasterデータベースのDeploymentを作成します。
 
   実行例:
@@ -406,6 +452,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   $ kubectl create -f redis-master-deployment.yaml
   deployment.apps/redis-master created
   ```
+
+
 
 3. Redis MasterデータベースのPod動作を確認します。
 
@@ -416,6 +464,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   NAME                            READY   STATUS    RESTARTS   AGE
   redis-master-5d8b66464f-qjjfn   1/1     Running   0          32s
   ```
+
+
 
 4. デプロイしたRedis Masterデータベースが正しく動作するかテストしてみましょう。
 
@@ -434,6 +484,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   > `kubectl exec -it POD(正確には1つのコンテナ) -- COMMAND`コマンドは指定したコンテナ内でプロセスを動作させる際に使用します。
   > 今回は，`redis-master-5d8b66464f-qjjfn`というPODのコンテナ内で`redis-cli`コマンドを実行しました。
   > 上記では，正常なら`ping`に対して`PONG`とレスポンスを返してくれる仕組みを使って確認をとっています。
+
+
 
 ### guestbookアプリケーションからRedis Masterデータベースに接続できるようにserviceを公開しましょう。
 
@@ -461,6 +513,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   このyamlは，`redis-master`という名前のserviceを作成し，`6379`番ポートで外部公開します。
   また，`selectore`のところで `app=redis`と`role=master`のラベルが指定されたPodをターゲットにルーティングするように構成しています。
 
+
+
 6. Redis Masterデータベースを外部公開するServiceを作成します。
 
   実行例:
@@ -469,6 +523,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   $ kubectl create -f redis-master-service.yaml
   service/redis-master created
   ```
+
+
 
 7. guestbookアプリケーションがRedis Masterデータベースを発見できるようにguestbookアプリを再起動します。
 
@@ -481,6 +537,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   $ kubectl create -f guestbook-deployment.yaml
   deployment.apps/guestbook-v1 created
   ```
+
+
 
 8. ブラウザ上で以下のURLからgurstbookアプリの動作をテストします。
 
@@ -510,6 +568,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   guestbook アプリの "v1" が動作していることを確認してください。
 
   ![guestbook-v1-lab3 application in browser](images/guestbook-in-browser-v1-lab3.png) 
+
+
 
 ### 複数のguestbookアプリケーションが同一のRedisデータベースを使うことで永続化できることを確認しましょう
 
@@ -550,6 +610,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
 目指す構成イメージは以下です。
 
 ![guestbook-redis-master-slace-persistance](images/Master-Slave.png)
+
+
 
 10. Redis slaveのdeploymentの構成見てみましょう。
 
@@ -593,6 +655,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   コンテナイメージとして`image: ibmcom/guestbook-redis-slave:v2`を指定し，
   `spec.replicas: 2`の部分で，2つのレプリカを生成するように構成されていることが分かります。
 
+
+
 11. Redis Slaveデータベースのdeploymentを作成します。
 
   実行例:
@@ -601,6 +665,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   $ kubectl create -f redis-slave-deployment.yaml
   deployment.apps/redis-slave created
   ```
+
+
 
 12. Redis Slaveデータベースの全てのPodが動作しているか確認します。
 
@@ -612,6 +678,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   redis-slave-586b4c847c-kj4q9   1/1     Running   0          1m
   redis-slave-586b4c847c-lw5gj   1/1     Running   0          1m
   ```
+
+
 
 13. Redis Slaveのコンテナ内に入り，データベースを正しく閲覧できるか確認します。さらに，slaveとして`read-only`に設定されていることを確認します。
 
@@ -670,6 +738,8 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   >repl_backlog_histlen:2254
   >```
 
+
+
 14. Redis Slaveデータベースを外部公開するためのServiceの構成を見てみましょう。
 
   **redis-slave-service.yaml**  を任意のエディタで開きます。  
@@ -691,12 +761,16 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
       role: slave
   ```
 
+
+
 15. guestbookアプリからRedis Slaveデータベースに接続するためのServiceを作成します。
 
   ```bash
   $ kubectl create -f redis-slave-service.yaml
   service/redis-slave created
   ```
+
+
 
 16. guestbookアプリケーションがRedis Slaveデータベースに接続できるようguestbookアプリを再起動します。
 
@@ -710,13 +784,19 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   deployment.apps/guestbook-v1 created
   ```
 
+
+
 17. ブラウザ上で以下のURLからgurstbookアプリの動作をテストします。
 
   ブラウザで`<Public IP>:<NodePort>`を開きます。
 
 以上でLab3のハンズオンは完了です。
 
-最後に，**Lab3で作成したK8sリソースを以下のコマンドを削除** します。
+
+
+## 最後に
+
+**Lab3で作成したK8sリソースを以下のコマンドを削除** します。
 
   ```bash
   各種Deployment/Serviceを削除する
