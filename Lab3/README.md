@@ -40,7 +40,7 @@ Lab 3では大きく以下の2つを体験します。
 
 ```bash
 #マニフェストファイルが用意されているリポジトリのクローンとディレクトリ移動
-$ git clone https://github.com/cloud-handson/guestbook.git
+$ git clone https://github.com/kota661/guestbook.git
 $ cd guestbook/v1
 ```
 
@@ -82,7 +82,7 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
       spec:
         containers:
         - name: guestbook
-          image: ibmcom/guestbook:v1
+          image: kota661/guestbook:v1
           ports:
           - name: http-server
             containerPort: 3000
@@ -90,7 +90,7 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
 
   上記の構成ファイルでは，`guestbook-v1`という名前の`deployment`オブジェクトを作成しています。  
   Deployment定義の場合は `spec: `にレプリカ数や，使用するコンテナイメージ，ポートなどを指定します。
-  今回の例では`deployment`の構成要素として`ibmcom/guestbook:v1`というコンテナイメージが指定され，これが`Pod`として生成されます。
+  今回の例では`deployment`の構成要素として`kota661/guestbook:v1`というコンテナイメージが指定され，これが`Pod`として生成されます。
   また，`Replicaset`として`Pod`の数が3つに指定(`replicas: 3`)されているため，Kubernetesは常に3つのアクティブな`Pod`が動作するよう動きます。
 
   >補足:  
@@ -279,7 +279,7 @@ controlplane $
   $ CLUSTER_NAME=mycluster
 
   # アプリのデプロイ
-  kubectl create deployment guestbook --image=ibmcom/guestbook:v1
+  kubectl create deployment guestbook --image=kota661/guestbook:v1
 
   # サービス公開のために、クラスターに割り当てられたIngress Subdomain、Ingress Secretの確認
   $ ibmcloud ks cluster get --cluster $CLUSTER_NAME
@@ -532,9 +532,45 @@ controlplane $
 
 
 
-7. guestbookアプリケーションがRedis Masterデータベースを発見できるようにguestbookアプリを再起動します。
+1. guestbookアプリケーションがRedis Masterデータベースを利用できるように接続情報を定義します。
 
-  実行例:
+  **guestbook/v1/guestbook-deployment.yaml** を任意のエディタで開いて `spec.template.spec.containers.environment` のコメントアウトを外し、DBのHOSTやPORT番号を定義します。
+  Terminalで操作されている場合には `vi guestbook-deployment.yaml` を実行することで内容を編集することができます。編集を開始する場合にはiを入力し[INSERT]モードにし、保存する場合は[Esc]キーを押し、:wq!を入力します。
+
+  変更前
+  ```yaml
+  ...
+      - name: guestbook
+        image: kota661/guestbook:v1
+        ports:
+        - name: http-server
+          containerPort: 3000
+        # environment:
+        #   - REDIS_MASTER_SERVICE_HOST=redis-master
+        #   - REDIS_MASTER_SERVICE_PORT=6379
+        resources:
+  ...
+  ```
+  
+  変更後  
+  ```yaml
+  ...
+  
+      containers:
+      - name: guestbook
+        image: kota661/guestbook:v1
+        ports:
+        - name: http-server
+          containerPort: 3000
+        environment:
+          - REDIS_MASTER_SERVICE_HOST=redis-master
+          - REDIS_MASTER_SERVICE_PORT=6379
+        resources:
+  ...
+  ```
+
+
+1. 定義した内容を適用するために、アプリを再デプロイします。
 
   ```bash
   $ kubectl delete deployment guestbook-v1
@@ -545,8 +581,7 @@ controlplane $
   ```
 
 
-
-8. ブラウザ上で以下のURLからgurstbookアプリの動作をテストします。
+1. ブラウザ上で以下のURLからgurstbookアプリの動作をテストします。
 
   > 補足
   >
@@ -637,7 +672,7 @@ controlplane $
       spec:
         containers:
         - name: redis-slave
-          image: ibmcom/guestbook-redis-slave:v2
+          image: kota661/guestbook-redis-slave:v2
           resources:
             requests:
               cpu: 100m
@@ -650,7 +685,7 @@ controlplane $
             containerPort: 6379
   ```
 
-  コンテナイメージとして`image: ibmcom/guestbook-redis-slave:v2`を指定し，
+  コンテナイメージとして`image: kota661/guestbook-redis-slave:v2`を指定し，
   `spec.replicas: 2`の部分で，2つのレプリカを生成するように構成されていることが分かります。
 
 

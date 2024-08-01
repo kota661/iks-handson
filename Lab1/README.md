@@ -18,16 +18,16 @@ Lab1〜3ではWebサイトのゲストブック機能を提供するシンプル
 
 ## 1. K8sクラスターへのアプリケーションデプロイ
 `guestbook` アプリケーションをK8sクラスターにデプロイします。  
-使用するアプリは`ibmcom/guestbook:v1` という名前で，ビルド済のDockerイメージがDockerHub上にアップロード済です。
+使用するアプリは`kota661/guestbook:v1` という名前で，ビルド済のDockerイメージがDockerHub上にアップロード済です。
 
 
 
-1. `guestbook`を実行します。 `kubectl create deployment guestbook --image=ibmcom/guestbook:v1`
+1. `guestbook`を実行します。 `kubectl create deployment guestbook --image=kota661/guestbook:v1`
 
     実行例:
 
     ```bash
-    $ kubectl create deployment guestbook --image=ibmcom/guestbook:v1
+    $ kubectl create deployment guestbook --image=kota661/guestbook:v1
     deployment.apps/guestbook created
     ```
 

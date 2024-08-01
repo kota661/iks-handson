@@ -27,7 +27,7 @@ Lab2を実施するには，`guestbook` アプリケーションのDeploymentお
 
 ```bash
 # アプリのデプロイ
-$ kubectl create deployment guestbook --image=ibmcom/guestbook:v1
+$ kubectl create deployment guestbook --image=kota661/guestbook:v1
 # サービス公開
 $ kubectl expose deployment guestbook --type="NodePort" --port=3000
 # NodePortのPort番号を確認
@@ -45,7 +45,7 @@ $ kubectl get svc nginx
   $ CLUSTER_NAME=mycluster
 
   # アプリのデプロイ
-  kubectl create deployment guestbook --image=ibmcom/guestbook:v1
+  kubectl create deployment guestbook --image=kota661/guestbook:v1
 
   # サービス公開のために、クラスターに割り当てられたIngress Subdomain、Ingress Secretの確認
   $ ibmcloud ks cluster get --cluster $CLUSTER_NAME
@@ -163,7 +163,7 @@ K8sは，アプリケーションを新しいバージョンのコンテナイ�
 
 いままでは， `v1` タグが付与されたイメージを使用していました。
 
-`$ kubectl run guestbook --image=ibmcom/guestbook:v1`
+`$ kubectl run guestbook --image=kota661/guestbook:v1`
 
 新しいバージョンの`v2`のコンテナイメージにアップデートしてみましょう。また、`v2`に変更した後再度`v1`に切り戻すロールバックも実施します。
 
@@ -179,7 +179,7 @@ K8sは，アプリケーションを新しいバージョンのコンテナイ�
     実行例:
 
     ```bash
-    $ kubectl set image deployment/guestbook guestbook=ibmcom/guestbook:v2
+    $ kubectl set image deployment/guestbook guestbook=kota661/guestbook:v2
     deployment.extensions/guestbook image updated
     ```
 
@@ -321,7 +321,7 @@ v2のコンテナイメージに置き換わりましたが、再度v1のイメ�
     上記の例の場合は，
     `guestbook-75786d799f` がv1のコンテナイメージを指定しているグループのReplicaSetです。
 
-    `ibmcom/guestbook:v1`の指定箇所は，以下のように `kubectl describe`を使って詳細情報から得られます。
+    `kota661/guestbook:v1`の指定箇所は，以下のように `kubectl describe`を使って詳細情報から得られます。
 
     ```bash
     $ kubectl describe replicasets guestbook-75786d799f
@@ -335,7 +335,7 @@ v2のコンテナイメージに置き換わりましたが、再度v1のイメ�
            run=guestbook
       Containers:
        guestbook:
-        Image:        ibmcom/guestbook:v1
+        Image:        kota661/guestbook:v1
         Port:         <none>
         Host Port:    <none>
     .

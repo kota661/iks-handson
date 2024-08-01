@@ -30,7 +30,7 @@ kubectl get nodes
 
 ## Lab 1
 ```
-kubectl run guestbook --image=ibmcom/guestbook:v1
+kubectl run guestbook --image=kota661/guestbook:v1
 ```
 ```
 kubectl get pods
@@ -60,7 +60,7 @@ kubectl get pods
 ```
 ## Lab 2
 ```
-kubectl run guestbook --image=ibmcom/guestbook:v1
+kubectl run guestbook --image=kota661/guestbook:v1
 ```
 ```
 kubectl expose deployment guestbook --type="NodePort" --port=3000
@@ -75,7 +75,7 @@ kubectl rollout status deployment guestbook
 kubectl get pods
 ```
 ```
-kubectl set image deployment/guestbook guestbook=ibmcom/guestbook:v2
+kubectl set image deployment/guestbook guestbook=kota661/guestbook:v2
 ```
 ```
 kubectl rollout status deployment/guestbook
@@ -108,7 +108,7 @@ kubectl get pods
 ```
 ## Lab 3
 ```
-git clone https://github.com/cloud-handson/guestbook.git
+git clone https://github.com/kota661/guestbook.git
 ```
 ```
 cd guestbook/v1
