@@ -37,7 +37,7 @@ $ cd guestbook/v1
 ### まずは，`guestbook`アプリケーションの`deployment`の構成を見てみましょう。
 
 1. **guestbook/v1/guestbook-deployment.yaml**  を任意のエディタで開きます。 
-IBM Cloud Shellを使って操作している場合には `cat guestbook-deployment.yaml` を実行すると内容を表示することができます。
+Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行すると内容を表示することができます。
 
   ```yaml
   apiVersion: apps/v1
@@ -87,8 +87,8 @@ IBM Cloud Shellを使って操作している場合には `cat guestbook-deploym
   ```
 
 3. ラベル(`label`)が `app=guestbook` であるPod一覧を表示します。  
-  生成済の全てのPodの中から，labelが "app" で，その値が "guestbook" であるPodを一覧表示させてみます。
-  labelは，マニフェストファイル(yaml)内の `spec.template.metadata.labels` という項目の値を指します。
+    生成済の全てのPodの中から，labelが "app" で，その値が "guestbook" であるPodを一覧表示させてみます。
+    labelは，マニフェストファイル(yaml)内の `spec.template.metadata.labels` という項目の値を指します。
 
   実行例:
 
@@ -105,10 +105,11 @@ IBM Cloud Shellを使って操作している場合には `cat guestbook-deploym
 
 ### マニフェストファイルのレプリカ数を編集してPodをスケーリングさせてみましょう。
 
+
 4. マニフェストファイルを変更してPodをスケーリングさせてみましょう。
 
   **guestbook/v1/guestbook-deployment.yaml** を任意のエディタで開いて `spec.replicas` の値を `replicas: 5` に変更します。
-  IBM Cloud Shellを使って操作している場合には `vi guestbook-deployment.yaml` を実行することで内容を編集することができます。編集を開始する場合にはiを入力し[INSERT]モードにし、保存する場合は[Esc]キーを押し、:wq!を入力します。
+  Terminalで操作されている場合には `vi guestbook-deployment.yaml` を実行することで内容を編集することができます。編集を開始する場合にはiを入力し[INSERT]モードにし、保存する場合は[Esc]キーを押し、:wq!を入力します。
 
   ```yaml
   ...
@@ -148,7 +149,7 @@ IBM Cloud Shellを使って操作している場合には `cat guestbook-deploym
 
   >補足1:  
   > Kubernetesでは，基本的に全てのKubernetesリソースはマニフェストファイルを使用して管理できます。したがって，マニフェストファイルをバージョン管理すると，ある時点での状態をいつでも再現できるようになります。しかし一方で，各Kubernetesリソースタイプごとに管理していくことの複雑さや手間の問題も指摘されています。この問題の解決策としてHelmやKustomize，Kssonetなど様々なツールを活用している事例もありますので，興味のある方はぜひ調査してみてください。
-  
+
   >補足2:  
   > `kubectl edit` で直接編集することもできます。
   > ```bash
@@ -184,7 +185,14 @@ IBM Cloud Shellを使って操作している場合には `cat guestbook-deploym
 
 ### 次に，guestbookアプリケーションのserviceの構成を見てみましょう。
 
-7. **guestbook/v1/guestbook-service.yaml**  を任意のエディタで開きます。  
+7. ServiceのYamlをを任意のエディタで開きます。  
+
+   killercodaの方：**guestbook/v1/guestbook-service-killercoda.yaml**
+
+   IKSの方：**guestbook/v1/guestbook-service-iks.yaml**
+
+
+   例：guestbook-service-killercoda.yaml
 
   ```yaml
   apiVersion: v1
@@ -208,39 +216,100 @@ IBM Cloud Shellを使って操作している場合には `cat guestbook-deploym
 
 8. `guestbook-v1`deploymentを作成した時と同じコマンドを使って，`guestbook-service`serviceを作成しましょう。
 
-  実行例:
-
+​	**killercodaの方**
   ```bash
-  $ kubectl create -f guestbook-service.yaml
+  $ kubectl create -f guestbook-service-killercoda.yaml
   service/guestbook created
   ```
-  
-9. ブラウザ上で以下のURLからguestbookアプリの動作をテストします。
 
-    ブラウザで`<Public IP>:<NodePort>`を開きます。
-    
-    >補足:  
-    > ワーカーノードの `Public IP` は以下のように確認します。
-    > ```
-    > $ ibmcloud ks worker ls --cluster mycluster
-    > OK
-    > ID                                                 Public IP       Private IP      Machine Type   State    Status   Zone    Version
-    > kube-hou02-pa705552a5a95d4bf3988c678b438ea9ec-w1   184.173.52.92   10.76.217.175   free           normal   Ready    hou02   1.10.12_1543
-    > ```
-    > `NodePort` は以下のように確認します。
-    > ```
-    > $ kubectl get service guestbook
-    > NAME        TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
-    > guestbook   NodePort   172.21.180.240   <none>        3000:30173/TCP   3m
-    > ```
-    > 上記の出力例の場合の `<Public IP>:<NodePort>`は，次のようになります。
-    > - Public IP: `184.173.52.92`
-    > - NodePort: `30173`
-    > 
-    > したがって，ブラウザ上で `184.173.52.92:30173` にアクセスするとアプリケーションが開きます。
+​	**IKSの方**
 
-    guestbook アプリの "v1" が動作していることを確認してください。
+​	IKSではHTTPSでのセキュアなアクセスをサポートしているため、Ingressを利用してアプリを公開します。
+
+​	Clusterに割り当てられたIngress SubdomainやSecretを確認し、Yamlを修正したのち、Serviceを作成しましょう。
+
+   1. Clusterに割り当てられたIngress SubdomainやSecretを確認します。
+
+      ```:bash
+      # cluster名を定義
+      $ CLUSTER_NAME=mycluster
+      
+      # アプリのデプロイ
+      kubectl create deployment guestbook --image=ibmcom/guestbook:v1
+      
+      # サービス公開のために、クラスターに割り当てられたIngress Subdomain、Ingress Secretの確認
+      $ ibmcloud ks cluster get --cluster $CLUSTER_NAME
+      ```
+
+   1. 任意のエディタで`guestbook-service-killercoda.yaml`を開きます。
+
+    Ingressの定義箇所の３個所をそれぞれIngress Subdomain, Ingress Secretの値に書き換えます。
+      
+      ```:yaml
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: guestbook
+        labels:
+          app: guestbook
+      spec:
+        ports:
+        - port: 3000
+          targetPort: http-server
+        selector:
+          app: guestbook
+        type: ClusterIP
+      
+      ---
+      
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: guestbook
+      spec:
+        tls:
+          - hosts:
+              - {Ingress Subdomainの値を記載してください}
+            secretName: {Ingress Secretの値を記載してください}
+        rules:
+          - host: {Ingress Subdomainの値を記載してください}
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: guestbook
+                      port:
+                        number: 3000
+      ```
+
+   1. yaml
+      ```bash
+      $ kubectl create -f guestbook-service-iks.yaml
+      service/guestbook created
+      ```
+
+      
+      
+1. ブラウザ上でguestbookアプリにアクセスし動作をテストします。
+
+    > 補足
+    >
+    > **killercodaをご利用の場合 (NodePortでのサービス公開)**
+    >
+    > 1. `kubectl get service guestbook`を実行し、NodePortのPortを確認します。
+    >
+    > 2. killercodaの画面にて、メニュー＞Trafficを開き、Custom PortsにNode PortのPortを指定しアプリにアクセス、表示されることを確認します。
+    >
+    > 詳細な方法はLab1を参照してください。
+    >
+    > **IKSをご利用の場合 -  (Ingressでのサービス公開)**
+    >
+    > `ibmcloud ks cluster get --cluster $CLUSTER_NAME`を実行し、Clusterに割り当てられたIngress Subdomainにてアクセスを行ってください
     
+2. guestbook アプリの "v1" が動作していることを確認してください。
+
     ![guestbook-v1-lab3 application in browser](images/guestbook-in-browser-v1-lab3.png)
 
 以上の操作で，マニフェストファイル(yaml)で`deployment(guestbook-v1)`と`service(guestbook)`をKubernetes上に展開し，さらに外部からアクセス可能なguestbookアプリケーションを動作させることができました。またyamlを編集することで，Kubernetesが`desired state (宣言的に指定した状態)`を維持させるように動作することを確認できました。
@@ -354,7 +423,7 @@ IBM Cloud Shellを使って操作している場合には `cat guestbook-deploym
   3.で確認したPod名(上記例では`redis-master-5d8b66464f-qjjfn`)を引数に指定してコマンド実行し，コンテナ内に入って操作します。
 
   実行例:  
-  
+
   ```bash
   $ kubectl exec -it redis-master-5d8b66464f-qjjfn -- redis-cli
   127.0.0.1:6379> ping
@@ -448,20 +517,20 @@ IBM Cloud Shellを使って操作している場合には `cat guestbook-deploym
 
   複数のブラウザで同じguestbookアプリケーションを動作させる必要があります。
   例えば以下のいずれかの方法で試してみましょう。
-  
+
   - 通常ブラウザ と シークレットウィンドウ
   - Firefox と Chrome
-  
+
   複数のブラウザでguestbookアプリケーションを開けたら， それぞれのブラウザ上で **フォームに任意の文字列を入力** します。
-  
+
   以下の図は，Chromeのシークレットウィンドウと，Firefoxを使用した場合の例です。
-  
+
   ![guestbook-v1-lab3 application in chrome browser and firefox browser](images/guestbook-in-browser-v1-lab3-chrome-and-firefox-skitch.png)
 
   - ブラウザごとに異なるの文字列を入力する
   - 両方のブラウザでページを更新する
   - 同じ入力情報が確認できる
-  
+
   上記の動作を確認できたと思います。
   ここから，全てのPodインスタンスが同一のRedisデータベースに書き込み，全てのインスタンスはguestbookエントリを表示するために同じRedisデータベースから読み出していることがわかります。
   データの永続化ができたことで，トラフィック数の増加に応じてスケールもできるシンプルな3層アプリケーションを実現できました。
@@ -653,7 +722,10 @@ IBM Cloud Shellを使って操作している場合には `cat guestbook-deploym
   各種Deployment/Serviceを削除する
   1) guestbookアプリケーション
   $ kubectl delete -f guestbook-deployment.yaml
-  $ kubectl delete -f guestbook-service.yaml
+  # killercoda
+  $ kubectl delete -f guestbook-service-killercoda.yaml
+  # IKS
+  $ kubectl delete -f guestbook-service-iks.yaml
 
   2) Redis Slaveデータベース
   $ kubectl delete -f redis-slave-service.yaml

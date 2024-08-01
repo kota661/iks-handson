@@ -2,16 +2,74 @@
 
 Lab2では，「アプリケーションのスケーリング」と「アップデート&ロールバック」する方法を学びます。  
 
+## 0. Lab環境作成
+
+**Lab1から継続実施される場合は**すでにアプリやサービスが作成済みのため**環境作成は不要です**
+
 Lab2を実施するには，`guestbook` アプリケーションのDeploymentおよびServiceが動作している必要があります。以下の手順で `Deployment` や `Service` をデプロイしてください。
 
-実行例:
+そして、アプリが表示できることを確認してください。
+
+### killercodaの方  (NodePortでのサービス公開)
+
+1. 以下コマンドを実行し、環境を作成
 
 ```bash
+# アプリのデプロイ
 $ kubectl create deployment guestbook --image=ibmcom/guestbook:v1
+# サービス公開
 $ kubectl expose deployment guestbook --type="NodePort" --port=3000
+# NodePortのPort番号を確認
+$ kubectl get svc nginx
 ```
 
+2. killercodaの画面にて、メニュー＞Trafficを開き、Custom PortsにNode PortのPortを指定しアプリにアクセス、表示されることを確認します。
+
+### IKSの方 -  (Ingressでのサービス公開)
+
+1. 以下コマンドを実行し、環境を作成します。
+
+```bash
+# cluster名を定義
+$ CLUSTER_NAME=mycluster
+
+# アプリのデプロイ
+kubectl create deployment guestbook --image=ibmcom/guestbook:v1
+
+# サービス公開のために、クラスターに割り当てられたIngress Subdomain、Ingress Secretの確認
+$ ibmcloud ks cluster get --cluster $CLUSTER_NAME
+
+# サービス公開
+cat <<EOF | kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: guestbook
+spec:
+  tls:
+    - hosts:
+        - {Ingress Subdomainの値を記載してください}
+      secretName: {Ingress Secretの値を記載してください}
+  rules:
+    - host: {Ingress Subdomainの値を記載してください}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: guestbook
+                port:
+                  number: 3000
+EOF
+```
+
+2. Ingress Subdomainにアクセスしアプリにアクセス、表示されることを確認しあす。
+
+
+
 ## 1. レプリカ数(replica)の指定によるアプリケーションのスケーリング
+
 一般的に，同じアプリケーションを複数稼働させることで，負荷増大や障害に対しての可用性を高めることができます。  
 K8sでは`ReplicaSet` によって，Pod(Deployment)の複製が可能です。
 
@@ -147,30 +205,15 @@ K8sは，アプリケーションを新しいバージョンのコンテナイ�
 
 3. ブラウザ上でアプリケーションの動作を確認します。
 
-    ブラウザで`<Public IP>:<NodePort>`を開きます。
+    ブラウザでアプリを開きます
     
     >補足:  
-    > ワーカーノードの `Public IP` は以下のように確認します。
-    > ```
-    > $ ibmcloud ks worker ls --cluster mycluster
-    > OK
-    > ID                                                 Public IP       Private IP      Machine Type   State    Status   Zone    Version
-    > kube-hou02-pa705552a5a95d4bf3988c678b438ea9ec-w1   184.173.52.92   10.76.217.175   free           normal   Ready    hou02   1.10.12_1543
-    > ```
-    > `NodePort` は以下のように確認します。
-    > ```
-    > $ kubectl get service guestbook
-    > NAME        TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
-    > guestbook   NodePort   172.21.247.149   <none>        3000:30282/TCP   14m
-    > ```
-    > 上記の出力例の場合の `<Public IP>:<NodePort>`は，次のようになります。
-    > - Public IP: `184.173.52.92`
-    > - NodePort: `30282`
-    > 
-    > したがって，ブラウザ上で `184.173.52.92:30282` にアクセスするとアプリケーションが開きます。
-
+    > アプリへのアクセス方法はが不明な方はLab1を参照してください。
+    
     guestbook アプリの "v2" が動作していることを確認してください。
     下図のように，ページタイトルの文字列が `Guestbook - v2` に変更されているはずです。
+    
+    V2に切り替わらない場合は、キャッシュをクリアしてみてください。
     
     ![guestbook-v2 application in browser](images/guestbook-in-browser-v2.png)
 
@@ -272,14 +315,16 @@ v2のコンテナイメージに置き換わりましたが、再度v1のイメ�
 最後に， **Lab2で作成したK8sリソースを以下のコマンドで削除** します。
 
   ```bash
-  1) Deploymentを削除する
-  $ kubectl delete deployment guestbook
+#1) Deploymentを削除する
+$ kubectl delete deployment guestbook
 
-  2) Serviceを削除する
-  $ kubectl delete service guestbook
+#2) Serviceを削除する
+$ kubectl delete service guestbook
+  # IKSの場合は追加でIngressを削除
+$ kubectl delete ingress guestbook
 
-  3) 確認する
-  $ kubectl get pods  
+# 3) 確認する
+$ kubectl get pods  
   ```
 
 次のハンズオンはこちら [Lab3](../Lab3/README.md) です。
