@@ -2,8 +2,8 @@
 - [Lab 1) Kubernetesクラスターへのアプリケーションデプロイ](#lab-1-kubernetesクラスターへのアプリケーションデプロイ)
   - [1. K8sクラスターへのアプリケーションデプロイ](#1-k8sクラスターへのアプリケーションデプロイ)
   - [2. アプリの公開](#2-アプリの公開)
-    - [killercoda編  (NodePortでのサービス公開)](#killercoda編--nodeportでのサービス公開)
-    - [IKS編 -  (Ingressでのサービス公開)](#iks編----ingressでのサービス公開)
+    - [killercodaの方  (NodePortでのサービス公開)](#killercodaの方--nodeportでのサービス公開)
+    - [IKSの方 -  (Ingressでのサービス公開)](#iksの方----ingressでのサービス公開)
   - [最後に](#最後に)
 
 
@@ -24,60 +24,61 @@ Lab1〜3ではWebサイトのゲストブック機能を提供するシンプル
 
 1. `guestbook`を実行します。 `kubectl create deployment guestbook --image=ibmcom/guestbook:v1`
 
-​	実行例:
+    実行例:
 
-```bash
-$ kubectl create deployment guestbook --image=ibmcom/guestbook:v1
-deployment.apps/guestbook created
-```
+    ```bash
+    $ kubectl create deployment guestbook --image=ibmcom/guestbook:v1
+    deployment.apps/guestbook created
+    ```
 
 
 
-2. デプロイしたアプリのステータスを確認します。
-  `kubectl get pods`
-  Podのステータスが「実行中(Running)」になったら，OKです。
+1. デプロイしたアプリのステータスを確認します。
+   
+    `kubectl get pods`
+  
+    Podのステータスが「実行中(Running)」になったら，OKです。
 
-  実行例：
-  ```bash
-  $ kubectl get pods
-  NAME                         READY   STATUS    RESTARTS   AGE
-  guestbook-747778c876-57vrl   1/1     Running   0          14s
-  ```
+    実行例：
+    ```bash
+    $ kubectl get pods
+    NAME                         READY   STATUS    RESTARTS   AGE
+    guestbook-747778c876-57vrl   1/1     Running   0          14s
+    ```
 
->補足:  
-> アプリケーションの実行ステータスを確認してみましょう。
-> 
-> ```bash
-> $ kubectl get pods
-> NAME                         READY   STATUS    RESTARTS   AGE
-> guestbook-75786d799f-8c8cv   1/1     Running   0          1m
-> ```
-> 
-> コマンド実行直後は，STATUS属性が `ContainerCreating` です。少し待つと実行中を示す`Running`に変わります。READY属性も `0/1`から`1/1`に変わっているはずです。
->    
-> createコマンドの実行によって`guestbook`コンテナが内包されている`Pod`が生成されました。ですが生成されたものは，`Pod`だけではなく， K8sでコンテナを上手く管理するための以下のコンポーネントが生成されています。
-> 
-> - **Pod**: アプリケーションコンテナを内包するK8sリソース
-> - **ReplicaSet**: Podのライフサイクル管理をするK8sリソース
-> - **Deployment**: Pod/ReplicaSetのライフサイクルを管理するK8sリソース
->  
-> 上記のK8sリソースを確認するために以下コマンドを実行します。 (guestbookに関連するPod/ReplicaSet/Deploymentが確認できます)
-> 
-> ```bash
-> $ kubectl get all
-> NAME                             READY   STATUS    RESTARTS   AGE
-> pod/guestbook-75786d799f-8c8cv   1/1     Running   0          7m
-> 
-> NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
-> service/kubernetes   ClusterIP   172.21.0.1   <none>        443/TCP   14h
-> 
-> NAME                        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
-> deployment.apps/guestbook   1         1         1            1           7m
-> 
-> NAME                                   DESIRED   CURRENT   READY   AGE
-> replicaset.apps/guestbook-75786d799f   1         1         1       7m
-> ```
-
+    >補足:  
+    > アプリケーションの実行ステータスを確認してみましょう。
+    > 
+    > ```bash
+    > $ kubectl get pods
+    > NAME                         READY   STATUS    RESTARTS   AGE
+    > guestbook-75786d799f-8c8cv   1/1     Running   0          1m
+    > ```
+    > 
+    > コマンド実行直後は，STATUS属性が `ContainerCreating` です。少し待つと実行中を示す`Running`に変わります。READY属性も `0/1`から`1/1`に変わっているはずです。
+    >    
+    > createコマンドの実行によって`guestbook`コンテナが内包されている`Pod`が生成されました。ですが生成されたものは，`Pod`だけではなく， K8sでコンテナを上手く管理するための以下のコンポーネントが生成されています。
+    > 
+    > - **Pod**: アプリケーションコンテナを内包するK8sリソース
+    > - **ReplicaSet**: Podのライフサイクル管理をするK8sリソース
+    > - **Deployment**: Pod/ReplicaSetのライフサイクルを管理するK8sリソース
+    >  
+    > 上記のK8sリソースを確認するために以下コマンドを実行します。 (guestbookに関連するPod/ReplicaSet/Deploymentが確認できます)
+    > 
+    > ```bash
+    > $ kubectl get all
+    > NAME                             READY   STATUS    RESTARTS   AGE
+    > pod/guestbook-75786d799f-8c8cv   1/1     Running   0          7m
+    > 
+    > NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+    > service/kubernetes   ClusterIP   172.21.0.1   <none>        443/TCP   14h
+    > 
+    > NAME                        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+    > deployment.apps/guestbook   1         1         1            1           7m
+    > 
+    > NAME                                   DESIRED   CURRENT   READY   AGE
+    > replicaset.apps/guestbook-75786d799f   1         1         1       7m
+    > ```
 
 
 ## 2. アプリの公開
@@ -96,7 +97,7 @@ K8sクラスターの外からも`guestbook`にアクセスできるようアプ
 
 
 
-### killercoda編  (NodePortでのサービス公開)
+### killercodaの方  (NodePortでのサービス公開)
 
 killercodaではNodePortがサポートされているので、そちらを利用してアプリを公開します
 
@@ -138,23 +139,22 @@ killercodaではNodePortがサポートされているので、そちらを利�
 
 3. 実際にアプリにアクセスします
 
-​	2の手順で取得したポート番号（NodePort）を使用してアプリケーションにアクセスします。
+    2の手順で取得したポート番号（NodePort）を使用してアプリケーションにアクセスします。
 
-​	killercodaの右上メニュから **Traffic / Ports** をクリックします
+    killercodaの右上メニュから **Traffic / Ports** をクリックします
 
-​	表示された　Traffic Port Accessor　にて　Custom Ports　にポート番号（NodePort）を記載しAccessボタンををクリックします。
+    表示された　Traffic Port Accessor　にて　Custom Ports　にポート番号（NodePort）を記載しAccessボタンををクリックします。
 
-​	![traffic.png](./images/traffic.png)
-
-
-
-以下のような画面が表示されていればOKです。
-
-![guestbook application in browser](images/guestbook-in-browser-killercoda.png)
+    ![traffic.png](./images/traffic.png)
 
 
+    以下のような画面が表示されていればOKです。
 
-### IKS編 -  (Ingressでのサービス公開)
+    ![guestbook application in browser](images/guestbook-in-browser-killercoda.png)
+
+
+
+### IKSの方 -  (Ingressでのサービス公開)
 
 IBM Cloud Kubernetes ServiceのVPCクラスターではHTTPSでのセキュアなアプリ公開が行えるIngressが利用できるためそちらで公開します
 
@@ -307,25 +307,25 @@ IBM Cloud Kubernetes ServiceのVPCクラスターではHTTPSでのセキュア�
    ![guestbook application in browser](images/guestbook-in-browser-iks.png)
 
 
-> 補足:  
->
-> 今回はIngressを利用しましたが、IBM Cloud Kubernetes Service のVPCクラスターでは３つの公開方法をサポートしています
->
-> * Ingress
->   * HTTPSにてアクセスを保護した接続
->   * クラスター事に自動的に払い出されたFQDNを利用してアクセスが可能
-> * Node Port
->   * NodeのIPを利用したアクセス
->   * VPCを利用したクラスターでは、セキュアな構成を取っており、NodeはPrivateIPのみ付与されます。そのためNodePortを利用する場合は以下２点を考慮する必要があります
->   * アクセス元がIBM Cloudの外部の場合はVPNを利用するなどPrivate IPが呼び出せるようにする
->   * ClusterのSecurity Groupにて、NodePortのPortに対するアクセスを許可する
-> * LoadBalancer
->   * VPC Loadbalancerを利用したアクセス
->   * LoadBalancer TypeのServiceを作成した際は自動的にVPCのLoad Balancerがオーダーされ利用可能となるよう構築が行われます
+    > 補足:  
+    >
+    > 今回はIngressを利用しましたが、IBM Cloud Kubernetes Service のVPCクラスターでは３つの公開方法をサポートしています
+    >
+    > * Ingress
+    >   * HTTPSにてアクセスを保護した接続
+    >   * クラスター事に自動的に払い出されたFQDNを利用してアクセスが可能
+    > * Node Port
+    >   * NodeのIPを利用したアクセス
+    >   * VPCを利用したクラスターでは、セキュアな構成を取っており、NodeはPrivateIPのみ付与されます。そのためNodePortを利用する場合は以下２点を考慮する必要があります
+    >   * アクセス元がIBM Cloudの外部の場合はVPNを利用するなどPrivate IPが呼び出せるようにする
+    >   * ClusterのSecurity Groupにて、NodePortのPortに対するアクセスを許可する
+    > * LoadBalancer
+    >   * VPC Loadbalancerを利用したアクセス
+    >   * LoadBalancer TypeのServiceを作成した際は自動的にVPCのLoad Balancerがオーダーされ利用可能となるよう構築が行われます
 
 
 
-以上でサンプルアプリケーション`guestbook`をK8sクラスター上にデプロイし，外部からアクセス可能な状態にできました。
+    以上でサンプルアプリケーション`guestbook`をK8sクラスター上にデプロイし，外部からアクセス可能な状態にできました。
 
 
 

@@ -1,3 +1,10 @@
+- [Lab 0. セットアップ - killercoda編](#lab-0-セットアップ---killercoda編)
+  - [1. killercodaでのインスタンス作成](#1-killercodaでのインスタンス作成)
+  - [Tips, トラブルシュート](#tips-トラブルシュート)
+    - [webアプリへのHTTPアクセス](#webアプリへのhttpアクセス)
+    - [1時間経過後](#1時間経過後)
+
+
 # Lab 0. セットアップ - killercoda編
 Kubernetes(K8s)ハンズオンを実施するための事前準備を行います。
 

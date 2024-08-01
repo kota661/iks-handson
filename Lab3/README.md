@@ -110,6 +110,12 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
   deployment.apps/guestbook-v1 created
   ```
 
+  > 補足
+  >
+  > 以下のエラーが発生した場合はv1のフォルダに移動できているか確認してください
+  >
+  > error: the path "guestbook-deployment.yaml" does not exist
+controlplane $ 
 
 
 3. ラベル(`label`)が `app=guestbook` であるPod一覧を表示します。  
@@ -542,28 +548,20 @@ Terminalで操作される場合は`cat guestbook-deployment.yaml` を実行す�
 
 8. ブラウザ上で以下のURLからgurstbookアプリの動作をテストします。
 
-  ブラウザで`<Public IP>:<NodePort>`を開きます。
-    
-  >補足:  
-  > これまでのハンズオンと同様に以下の手順で `Public IP`と`NodePort`の情報を取得できます。
-  > ワーカーノードの `Public IP` は以下のように確認します。
-  > ```
-  > $ ibmcloud ks worker ls --cluster mycluster
-  > OK
-  > ID                                                 Public IP       Private IP      Machine Type   State    Status   Zone    Version
-  > kube-hou02-pa705552a5a95d4bf3988c678b438ea9ec-w1   184.173.52.92   10.76.217.175   free           normal   Ready    hou02   1.10.12_1543
-  > ```
-  > `NodePort` は以下のように確認します。
-  > ```
-  > $ kubectl get service guestbook
-  > NAME        TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
-  > guestbook   NodePort   172.21.180.240   <none>        3000:30173/TCP   3m
-  > ```
-  > 上記の出力例の場合の `<Public IP>:<NodePort>`は，次のようになります。
-  > - Public IP: `184.173.52.92`
-  > - NodePort: `30173`
-  > 
-  > したがって，ブラウザ上で `184.173.52.92:30173` にアクセスするとアプリケーションが開きます。
+  > 補足
+  >
+  > **killercodaをご利用の場合 (NodePortでのサービス公開)**
+  >
+  > 1. `kubectl get service guestbook`を実行し、NodePortのPortを確認します。
+  >
+  > 2. killercodaの画面にて、メニュー＞Trafficを開き、Custom PortsにNode PortのPortを指定しアプリにアクセス、表示されることを確認します。
+  >
+  > 詳細な方法はLab1を参照してください。
+  >
+  > **IKSをご利用の場合 -  (Ingressでのサービス公開)**
+  >
+  > `ibmcloud ks cluster get --cluster $CLUSTER_NAME`を実行し、Clusterに割り当てられたIngress Subdomainにてアクセスを行ってください
+
 
   guestbook アプリの "v1" が動作していることを確認してください。
 
