@@ -10,7 +10,7 @@ Kubernetes(K8s)ハンズオンを実施するための事前準備を行いま�
 
 
 
-killercodaで提供されるPyagroundを利用することで、素早くKubernetesを触ることができます。
+killercodaで提供されるplaygroundsを利用することで、素早くKubernetesを触ることができます。
 
 無料枠では環境は６０分のみ利用可能です。６０分経過後は環境が削除されます。
 
@@ -22,7 +22,7 @@ killercodaで提供されるPyagroundを利用することで、素早くKuberne
 
 
 
-1. killercodaにて提供されているKubernetesのPlaygroundにアクセスします
+1. killercodaにて提供されているKubernetesのplaygroundsにアクセスします
 
    https://killercoda.com/playgrounds/scenario/kubernetes
 
