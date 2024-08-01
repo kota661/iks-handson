@@ -1,4 +1,13 @@
+- [Lab 0. セットアップ](#lab-0-セットアップ)
+  - [0. IKSクラスタの作成、CLIのインストール](#0-iksクラスタの作成cliのインストール)
+  - [1. IBM CLIを使ってログイン](#1-ibm-cliを使ってログイン)
+  - [2. Kubernetesクラスタへの接続情報の取得](#2-kubernetesクラスタへの接続情報の取得)
+  - [Tips, トラブルシュート](#tips-トラブルシュート)
+
+
+
 # Lab 0. セットアップ
+
 Kubernetes(K8s)ハンズオンを実施するための事前準備を行います。
 
 ## 0. IKSクラスタの作成、CLIのインストール
@@ -114,7 +123,7 @@ ibmcloud cli にてIKSクラスタを操作できるように接続情報を取�
         Plugin version 0.2.102 is now available. To update run: ibmcloud plugin update container-service -r Bluemix
         ```
     * 対応方法
-  
+    
         新しいプラグインにアップデートしてください
         ```
         $ ibmcloud plugin update --all
