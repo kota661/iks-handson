@@ -231,7 +231,7 @@ controlplane $
    IKSの方：**guestbook/v1/guestbook-service-iks.yaml**
 
 
-   例：guestbook-service-killercoda.yaml
+   例：'cat guestbook-service-killercoda.yaml'
 
   ```yaml
   apiVersion: v1
@@ -532,7 +532,7 @@ controlplane $
 
 
 
-1. guestbookアプリケーションがRedis Masterデータベースを利用できるように接続情報を定義します。
+7. guestbookアプリケーションがRedis Masterデータベースを利用できるように接続情報を定義します。
 
   **guestbook/v1/guestbook-deployment.yaml** を任意のエディタで開いて `spec.template.spec.containers.environment` のコメントアウトを外し、DBのHOSTやPORT番号を定義します。
   Terminalで操作されている場合には `vi guestbook-deployment.yaml` を実行することで内容を編集することができます。編集を開始する場合にはiを入力し[INSERT]モードにし、保存する場合は[Esc]キーを押し、:wq!を入力します。
@@ -572,7 +572,7 @@ controlplane $
   ```
 
 
-1. 定義した内容を適用するために、アプリを再デプロイします。
+8. 定義した内容を適用するために、アプリを再デプロイします。
 
   ```bash
   $ kubectl delete deployment guestbook-v1
@@ -583,7 +583,7 @@ controlplane $
   ```
 
 
-1. ブラウザ上で以下のURLからgurstbookアプリの動作をテストします。
+9. ブラウザ上で以下のURLからgurstbookアプリの動作をテストします。
 
   > 補足
   >
@@ -608,7 +608,7 @@ controlplane $
 
 ### 複数のguestbookアプリケーションが同一のRedisデータベースを使うことで永続化できることを確認しましょう
 
-9. 現在使用しているものとは異なるブラウザを立ち上げてguestbookアプリを開き，動作確認します。
+10. 現在使用しているものとは異なるブラウザを立ち上げてguestbookアプリを開き，動作確認します。
 
   複数のブラウザで同じguestbookアプリケーションを動作させる必要があります。
   例えば以下のいずれかの方法で試してみましょう。
@@ -648,7 +648,7 @@ controlplane $
 
 
 
-10. Redis slaveのdeploymentの構成見てみましょう。
+11. Redis slaveのdeploymentの構成見てみましょう。
 
   **redis-slave-deployment.yaml**  を任意のエディタで開きます。  
 
@@ -691,8 +691,7 @@ controlplane $
   `spec.replicas: 2`の部分で，2つのレプリカを生成するように構成されていることが分かります。
 
 
-
-11. Redis Slaveデータベースのdeploymentを作成します。
+12. Redis Slaveデータベースのdeploymentを作成します。
 
   実行例:
 
@@ -703,7 +702,7 @@ controlplane $
 
 
 
-12. Redis Slaveデータベースの全てのPodが動作しているか確認します。
+13.   Redis Slaveデータベースの全てのPodが動作しているか確認します。
 
   実行例:
 
@@ -716,7 +715,7 @@ controlplane $
 
 
 
-13. Redis Slaveのコンテナ内に入り，データベースを正しく閲覧できるか確認します。さらに，slaveとして`read-only`に設定されていることを確認します。
+14. Redis Slaveのコンテナ内に入り，データベースを正しく閲覧できるか確認します。さらに，slaveとして`read-only`に設定されていることを確認します。
 
   12.で確認したPod名のうち1つを選択します(上記例では`redis-slave-586b4c847c-kj4q9`)。これを引数に指定してコマンド実行し，コンテナ内に入って操作します。
 
@@ -775,7 +774,7 @@ controlplane $
 
 
 
-14. Redis Slaveデータベースを外部公開するためのServiceの構成を見てみましょう。
+15. Redis Slaveデータベースを外部公開するためのServiceの構成を見てみましょう。
 
   **redis-slave-service.yaml**  を任意のエディタで開きます。  
 
@@ -798,7 +797,7 @@ controlplane $
 
 
 
-15. guestbookアプリからRedis Slaveデータベースに接続するためのServiceを作成します。
+16. guestbookアプリからRedis Slaveデータベースに接続するためのServiceを作成します。
 
   ```bash
   $ kubectl create -f redis-slave-service.yaml
@@ -807,7 +806,7 @@ controlplane $
 
 
 
-16. guestbookアプリケーションがRedis Slaveデータベースに接続できるようguestbookアプリを再起動します。
+17. guestbookアプリケーションがRedis Slaveデータベースに接続できるようguestbookアプリを再起動します。
 
   実行例:
 
@@ -821,7 +820,7 @@ controlplane $
 
 
 
-17.  ブラウザ上でgurstbookアプリの動作をテストします。
+18.  ブラウザ上でgurstbookアプリの動作をテストします。
 
   > 補足
   >
