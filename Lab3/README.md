@@ -540,32 +540,34 @@ controlplane $
   変更前
   ```yaml
   ...
-      - name: guestbook
-        image: kota661/guestbook:v1
-        ports:
-        - name: http-server
-          containerPort: 3000
-        # environment:
-        #   - REDIS_MASTER_SERVICE_HOST=redis-master
-        #   - REDIS_MASTER_SERVICE_PORT=6379
-        resources:
+      containers:
+        - name: guestbook
+          image: kota661/guestbook:v1
+          ports:
+            - name: http-server
+              containerPort: 3000
+          # env:
+          #   - name: REDIS_MASTER_SERVICE_HOST
+          #     value: "redis-master"
+          #   - name: REDIS_MASTER_SERVICE_PORT
+          #     value: "6379"
   ...
   ```
   
   変更後  
   ```yaml
   ...
-  
       containers:
-      - name: guestbook
-        image: kota661/guestbook:v1
-        ports:
-        - name: http-server
-          containerPort: 3000
-        environment:
-          - REDIS_MASTER_SERVICE_HOST=redis-master
-          - REDIS_MASTER_SERVICE_PORT=6379
-        resources:
+        - name: guestbook
+          image: kota661/guestbook:v1
+          ports:
+            - name: http-server
+              containerPort: 3000
+          env:
+            - name: REDIS_MASTER_SERVICE_HOST
+              value: "redis-master"
+            - name: REDIS_MASTER_SERVICE_PORT
+              value: "6379"
   ...
   ```
 
@@ -672,7 +674,7 @@ controlplane $
       spec:
         containers:
         - name: redis-slave
-          image: kota661/guestbook-redis-slave:v2
+          image: ibmcom/guestbook-redis-slave:v2
           resources:
             requests:
               cpu: 100m
@@ -685,7 +687,7 @@ controlplane $
             containerPort: 6379
   ```
 
-  コンテナイメージとして`image: kota661/guestbook-redis-slave:v2`を指定し，
+  コンテナイメージとして`image: ibmcom/guestbook-redis-slave:v2`を指定し，
   `spec.replicas: 2`の部分で，2つのレプリカを生成するように構成されていることが分かります。
 
 
