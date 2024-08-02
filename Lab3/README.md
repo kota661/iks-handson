@@ -821,9 +821,22 @@ controlplane $
 
 
 
-17. ブラウザ上で以下のURLからgurstbookアプリの動作をテストします。
+17.  ブラウザ上でgurstbookアプリの動作をテストします。
 
-  ブラウザで`<Public IP>:<NodePort>`を開きます。
+  > 補足
+  >
+  > **killercodaをご利用の場合 (NodePortでのサービス公開)**
+  >
+  > 1. `kubectl get service guestbook`を実行し、NodePortのPortを確認します。
+  >
+  > 2. killercodaの画面にて、メニュー＞Trafficを開き、Custom PortsにNode PortのPortを指定しアプリにアクセス、表示されることを確認します。
+  >
+  > 詳細な方法はLab1を参照してください。
+  >
+  > **IKSをご利用の場合 -  (Ingressでのサービス公開)**
+  >
+  > `ibmcloud ks cluster get --cluster $CLUSTER_NAME`を実行し、Clusterに割り当てられたIngress Subdomainにてアクセスを行ってください
+
 
 以上でLab3のハンズオンは完了です。
 
