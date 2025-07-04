@@ -149,7 +149,7 @@ killercodaではNodePortがサポートされているので、そちらを利�
 
 
     以下のような画面が表示されていればOKです。
-
+    
     ![guestbook application in browser](images/guestbook-in-browser-killercoda.png)
 
 

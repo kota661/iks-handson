@@ -1,305 +1,351 @@
-# Lab4) Helm チャートを使用したアプリケーションのデプロイ
+# 複数インスタンス環境でのSession管理
 
-Lab4では、Kubernetesのパッケージング技術の1つである [Helm](https://helm.sh/) を利用したデプロイの方法を学びます。
-Helm チャートと呼ばれる定義ファイルを使用すると，アプリケーションの定義やインストール，アップグレードを容易に行うことができます。
+セッション管理が必要なアプリはそのまま複数インスタンスで稼働させてしまうと、セッションを保持していないインスタンスにアクセスしてしまい、正常な動作が行えません（ログインしたのにログアウト状態となる、カートに入れた商品が消えてしまうなどなど）
 
-ここで実施する作業は1つです。
+対策としては以下２パターン考えられますが、おすすめは２番のセッション情報を外部DBに保持する方法です
 
-- **Helmチャートを使用して `JpetStore`アプリケーションをデプロイする**
+参考：https://12factor.net/ja/processes
 
-`JpetStore`はECサイトを模したサンプルアプリケーションです。
-
-`フロントのWebアプリケーション(Webコンテナ)`と，`動物の画像を格納するDB(DBコンテナ)`で構成されます。今回はいずれもDockerHub上にコンテナイメージとして準備済ですのでビルド作業は行いません。
-
-また，Helmチャートも事前に用意しています。Helmチャートを取得した後に，`helm install xxx`することでアプリケーションをデプロイできます。
-
-> ご自身でコンテナイメージのビルドから実施したい場合は，末尾のセクション `## 参考2: 自身でイメージビルドする方法` をご覧ください。
-
-
-## 事前準備
-
-helmのバージョン確認とレリポジトリの登録・更新
-
-* helm のバージョン確認
-
-    `helm version`コマンドでインストールされているhelmのバージョンが**v3.0.2以上**で有ることを確認します
-
-    実行例:
-    ```bash
-    $ helm version
-    version.BuildInfo{Version:"v3.0.2", GitCommit:"19e47ee3283ae98139d98460de796c1be1e3975f", GitTreeState:"clean", GoVersion:"go1.13.5"}
-    ```
-
-    > helm v2にて必要だったTillerが、helm v3では必要なくなり、Client-only architectureとなりました。
-    > https://developer.ibm.com/blogs/kubernetes-helm-3/
+1. セッション情報を保持ているインスタンスにアクセスが行くようにスティッキーセッション（Session Affinity）を設定する
+   * メリット
+     * アプリへの変更が不要で、いちばん簡単な方法
+   * デメリット
+     * 特定のインスタンスに依存してしまっている（ステートレスな環境ではない）
+     * インスタンスが異常終了した場合にセッションが消えてしまいます
+     * セッションがあるインスタンスにアクセスが行ってしまい、複数インスタンス運用していても、負荷が分散されずらい
+2. セッション管理を外部DBに保持するようにアプリを書き換える
+   * メリット
+     * インスタンスが終了してしまった場合もセッション情報が保持される
+     * どのインスタンスにアクセスがあっても同様の処理が行える
+     * 複数インスタンスで負荷を分散できる
+   * デメリット
+     * アプリ側に実装をいれる必要がある
 
 
-* helmリポジトリの登録と更新
+それでは実際にそれぞれの挙動を確認してみましょう
 
-    helm 公式リポジトリの登録と情報更新を行います。
-    > 今回は利用しませんが、行っておくと便利です
+## Labの流れ
+1. InMemory版のアプリを１Podで起動させ正常な動作を確認
+2. InMemory版のアプリをReplicas 3 にしてセッション情報が消えてしまうところを体験
+3. Session Affinityを利用したアプリの実行
+4. Redis版のアプリを１Pod＋Redisで起動させ正常な動作を確認
+5. Redis版のアプリをReplicas 3にして正常に動作することを体験
 
-    実行例:
-    ```bash
-    $ helm repo add stable https://charts.helm.sh/stable
-    $ helm repo update
-    Hang tight while we grab the latest from your chart repositories...
-    ...Successfully got an update from the "stable" chart repository
-    Update Complete. ⎈ Happy Helming!⎈
-    ```
+
+
+## 1. InMemory版のアプリを１Podで起動させ正常な動作を確認
+
+1. まずは１Podでデプロイし、正常な動作を確認しましょう
+
+   ```
+   kubectl apply -f webapp-in-memory.yaml
+   ```
+   
+   
+
+2. アプリにアクセスし正常な動作を確認してみましょう  
+
+	> 補足
+	>
+	> **killercodaをご利用の場合 (NodePortでのサービス公開)**
+	>
+	> 1. `kubectl get service inmemory`を実行し、NodePortのPortを確認します。
+	>
+	> 2. killercodaの画面にて、メニュー＞Trafficを開き、Custom PortsにNode PortのPortを指定しアプリにアクセス、表示されることを確認します。
+	>
+	> 詳細な方法はLab1を参照してください。
+	>
+	> **IKSをご利用の場合 -  (Ingressでのサービス公開)**
+	>
+	> //TODO
+	
+	![app-inmemory-1.png](./images/app-inmemory-1.png)
+
+  * Session IDがリロードしても同じIDとなっており、セッション情報が保持されています
+
+  * Hostnameが常に同じ（１Podしか無いので当然ですが、、）
+
+  * ページにアクセスするたびにカウントアップされます
+
+  * テキストを記載しSet SessionをクリックするとValueに表示されます
+
     
 
-## Helmチャートを使用して `JpetStore`アプリケーションをデプロイする
+3. 別のブラウザで同じページにアクセスすると別のセッションが開始されます。そしてそのブラウザでもカウントアップやValueが保持されます。
 
-1. ハンズオン用のJpetStoreリポジトリをクローンします。(Lab5でも使用します)
-    
-    `git`コマンドでクローンします。
-
-    実行例:
-    
-    ```bash
-    $ git clone https://github.com/ibm-cloud-labs/jpetstore-kubernetes-compact.git --depth 1
-    ```
-        
-2. Helmチャートの中身を確認します。
-
-    `JpetStore`アプリケーションをデプロイするためのHelmチャートは`jpetstore-kubernetes-compact/helm/modernpets`ディレクトリに入っています。
-    
-
-    実行例:
-    
-    ```bash
-    $ cd jpetstore-kubernetes-compact/helm
-    $ tree .
-    .
-    ├── mmssearch
-    │   ├── Chart.yaml
-    │   ├── README.md
-    │   ├── ics-values.yaml
-    │   ├── templates
-    │   │   ├── NOTES.txt
-    │   │   ├── _helpers.tpl
-    │   │   ├── deployment.yaml
-    │   │   ├── ingress.yaml
-    │   │   └── service.yaml
-    │   ├── values-icp.yaml
-    │   └── values.yaml
-    └── modernpets
-        ├── Chart.yaml
-        ├── templates
-        │   ├── NOTES.txt
-        │   ├── _helpers.tpl
-        │   ├── deployment.yaml
-        │   └── service.yaml
-        ├── values-icp.yaml
-        └── values.yaml
-
-    4 directories, 17 files
-    ```
-
-    上記出力結果に含まれるファイルを使用することで，
-    `JpetStore`アプリケーションをK8s上で動作させるために必要な`Deployment`や`Service`などのyamlを生成(して，K8sクラスターにデプロイ)することができます。
-
-    >補足:  
-    > 各yamlファイルの中身の確認はここではしませんが，後続のハンズオンで新規にサンプルのHelmチャートを作って紐解いていきます。
-    > 
-    > 興味のある方は，[Lab6](../Lab6/)を参照ください。
-    > 
-
-3. JpetStoreアプリケーションをデプロイします。
-
-    `helm install xxx`コマンドでHelmチャートを使用すると，JpetStoreアプリの`Webコンテナ`と`DBコンテナ`がデプロイされます。
-    
-    実行例:
-    
-    ```bash
-    jpetstore-kubernetes-compact/helmディレクトリで操作します。
-    $ cd ../helm
-    $ helm install jpetstore ./modernpets/
-    
-    デプロイできたか確認
-    $ helm list
-    NAME     	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART           	APP VERSION
-    jpetstore	default  	1       	2020-01-24 14:40:28.405356 +0900 JST	deployed	modernpets-0.1.5	1.0
-    
-    デプロイされたPodを確認します。
-    $ kubectl get pods
-    NAME                                                 READY   STATUS    RESTARTS   AGE
-    jpetstore-modernpets-jpetstoredb-7dd76668b5-sl6br    1/1     Running   0          1h
-    jpetstore-modernpets-jpetstoreweb-6d49474455-7wm85   1/1     Running   0          1h
-    jpetstore-modernpets-jpetstoreweb-6d49474455-tbww6   1/1     Running   0          1h
-    ```
-
-    上記出力から，Webコンテナ(`jpetstoreweb`)のPodが2つ，DBコンテナ(`jpetstoredb`)のPodが1つがデプロイされていることが分かります。
-    
-    >補足:  
-    > 自分のコンテナイメージを使用する場合は，`helm/modernpets/values.yaml`の`repository`部分を `<MYREGISTRY>/<MYNAMESPACE>`に置き換えます。
-    
-4. DeploymentやServiceについても確認します。
-    
-    実行例:
-
-    ```bash
-    $ kubectl  get all
-    NAME                                                     READY   STATUS    RESTARTS   AGE
-    pod/jpetstore-modernpets-jpetstoredb-7dd76668b5-sl6br    1/1     Running   0          1h
-    pod/jpetstore-modernpets-jpetstoreweb-6d49474455-7wm85   1/1     Running   0          1h
-    pod/jpetstore-modernpets-jpetstoreweb-6d49474455-tbww6   1/1     Running   0          1h
-    
-    NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
-    service/db           ClusterIP   172.21.203.103   <none>        3306/TCP       1h
-    service/kubernetes   ClusterIP   172.21.0.1       <none>        443/TCP        2d
-    service/web          NodePort    172.21.243.99    <none>        80:31918/TCP   1h
-    
-    NAME                                                DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
-    deployment.apps/jpetstore-modernpets-jpetstoredb    1         1         1            1           1h
-    deployment.apps/jpetstore-modernpets-jpetstoreweb   2         2         2            2           1h
-    
-    NAME                                                           DESIRED   CURRENT   READY   AGE
-    replicaset.apps/jpetstore-modernpets-jpetstoredb-7dd76668b5    1         1         1       1h
-    replicaset.apps/jpetstore-modernpets-jpetstoreweb-6d49474455   2         2         2       1h
-    ```    
-    
-    Webコンテナ(`jpetstoreweb`)，DBコンテナ(`jpetstoredb`)それぞれの **Deployment** と **Service** も作成されていることが分かります。
-    
-    通常は，今回のシンプルなケースであっても以下のyamlファイルを用意し，順にデプロイしていく必要があります。
-
-        - `web-deployment.yaml`
-        - `web-service.yaml`
-        - `db-deployment.yaml`
-        - `db-service.yaml`
-
-    このようにHelmチャートを使うことで、一括デプロイやロールバックなどの管理がやりやすくなります。
-    
-5. ブラウザ上でアプリケーションの動作を確認します。
-
-    ブラウザで`<Public IP>:<NodePort>`を開きます。
-    
-    >補足:  
-    > ワーカーノードの `Public IP` は以下のように確認します。
-    > 
-    > ```bash
-    > $ ibmcloud ks worker ls --cluster mycluster
-    > OK
-    > ID                                                 Public IP       Private IP      Machine Type   State    Status   Zone    Version
-    > kube-hou02-pa705552a5a95d4bf3988c678b438ea9ec-w1   184.173.52.92   10.76.217.175   free           normal   Ready    hou02   1.10.12_1543
-    > ```
-    > 
-    > `NodePort` は以下のように確認します。
-    > 
-    > ```bash
-    > $ kubectl get service
-    > NAME         TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
-    > db           ClusterIP   172.21.203.103   <none>        3306/TCP       1h
-    > kubernetes   ClusterIP   172.21.0.1       <none>        443/TCP        2d
-    > web          NodePort    172.21.243.99    <none>        80:31918/TCP   1h
-    > ```
-    > 
-    > 上記の出力例の場合の `<Public IP>:<NodePort>`は，次のようになります。
-    > - Public IP: `184.173.52.92`
-    > - NodePort: `31918`
-    > 
-    > したがって，ブラウザ上で `184.173.52.92:31918` にアクセスするとアプリケーションが開きます。
-
-    ページ内のリンクをドリルダウンして，動物画像を開いてみてください。正常に動作していれば以下図のように確認できます。
-    
-    ![](images/petstore.png)
-
-以上でLab4は終了です。  
-最後のハンズオンは[Lab5](../Lab5/)です。
+  ![app-inmemory-2.png](./images/app-inmemory-2.png)
 
 
-******
 
-## 参考1: YAMLファイルを使用したデプロイ (今回は実施しません。)
-
-  JpetStoreアプリのyamlファイルは， `jpetstore-kubernetes-compact/jpetstore` ディレクトリ配下にあります。
-
-    実行例: 
-
-    ```bash
-    jpetstore-kubernetes-helm/jpetstore ディレクトリで操作します。
-    $ kubectl apply -f jpetstore.yaml
-    deployment.extensions "jpetstoreweb" created
-    service "web" created
-    deployment.extensions "jpetstoredb" created
-    service "db" created
-    ```
-
-    >補足:  
-    > 自分のコンテナイメージを使用する場合は`jpetstore/jpetstore.yaml`の`image`セクションを `<MYREGISTRY>/<MYNAMESPACE>`に置き換えます。
-
-## 参考2: 自身でイメージビルドする方法
-
-1. ソースコードを入手します。
-
-    ```bash
-    $ git clone https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone.git
-    $ cd jpetstore-kubernetes
-    ```
-
-    > 補足:  
-    > フォルダーの構成
-    > クローンしたリポジトリは以下のファイルから構成されています。
-    > 
-    > | フォルダー | 説明 |
-    > | ---- | ----------- |
-    > |[**jpetstore**](https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone/tree/master/jpetstore)| Javaでかかれたペットショップのアプリケーション |
-    > |[**mmssearch**](https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone/tree/master/mmssearch)| GOで実装された画像認識機能付きチャットアプリ |
-    > |[**helm**](https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone/tree/master/helm)| KubernetesにデプロイするためのHelm チャート |
-    > |[**pet-images**](https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone/tree/master/pet-images)| チャットアプリの動作確認用の動物画像ファイル |
+> 補足:  
+>
+> セッション情報はInMemoryに保管されているためアプリが再作成された場合はセッション情報が消えてしまいます。
+>
+> アプリを再作成する場合は以下の手順を実行してみてください
+>
+> $ kubectl delete -f webapp-in-memory.yaml
+>
+> $ kubectl apply -f webapp-in-memory.yaml
 
 
-ここでは，ビルドしたコンテナイメージの置き場としてIBM Cloud Container Registryを使用します。  
-もちろんDockerHubやご自身のプライベートレジストリーを使用することもできます。その場合は`<MYREGISTRY>`部分を適宜置き換えてください。
 
-2. レジストリーの **Namespace** を設定します。
+## 2. InMemory版のアプリをReplicas 3 にしてセッション情報が消えてしまうところを体験
 
-    以下のコマンドを実行すると`Namespace`の一覧が表示されます。
+次に、replicasの数を３に変更し、複数Podでアプリを動かしてみましょう
 
-    ```bash
-    $ ibmcloud cr namespaces
-    ```
+1. webapp-in-memory.yamlの書き換え
 
-    既存の`Namespace`がなく，新規に作成する場合は以下のコマンドを実行してください。
-    
-    ```bash
-    $ ibmcloud cr namespace-add <NAMESPACE>
-    ```
+   ```
+   # 変更前
+   
+   spec:
+     replicas: 1 # 3
+     selector:
+       matchLabels:
+         app: inmemory
+   
+   # 変更後
+   
+   spec:
+     replicas: 3
+     selector:
+       matchLabels:
+         app: inmemory
+   
+   ```
 
-3. **Container Registry** (e.g. registry.ng.bluemix.net) の情報を確認します。
+   
 
-    ```bash
-    Container Registry                us.icr.io
-    Container Registry API endpoint   https://us.icr.io/api
-    IBM Cloud API endpoint            https://cloud.ibm.com
-    IBM Cloud account details         Hoge Fuga Account (xxxxxxxxxxxxxxxxx)
-    IBM Cloud organization details     ()
-    ```
+2. webapp-in-memory.yamlを適用する
 
-4. **jpetstoreweb** イメージをビルドし，レジストリーにプッシュします。 
+```
+$ kubectl apply -f webapp-in-memory.yaml
 
-    ```bash
-    jpetstore-kubernetes-allinone/jpetstoreディレクトリで操作します。
-    $ cd jpetstore
-    $ docker build . -t <MYREGISTRY>/<MYNAMESPACE>/jpetstoreweb
-    $ docker push <MYREGISTRY>/<MYNAMESPACE>/jpetstoreweb
-    ```
 
-   >補足:  
-   > `Unauthorized ` と表示された場合は`ibmcloud cr login` を実行してIBM Cloudにログインしてください。
+$ kubectl get pod
+NAME                        READY   STATUS              RESTARTS   AGE
+inmemory-86944f5474-plsxj   1/1     Running             0          3s
+inmemory-86944f5474-ptgvw   0/1     ContainerCreating   0          3s
+inmemory-86944f5474-rq748   1/1     Running             0          12m
+```
 
-5. 同様に， **jpetstoredb** イメージをビルドします。
 
-    ```bash
-    jpetstore-kubernetes-allinone/jpetstore/dbディレクトリで操作します。
-    $ cd db
-    $ docker build . -t <MYREGISTRY>/<MYNAMESPACE>/jpetstoredb
-    $ docker push <MYREGISTRY>/<MYNAMESPACE>/jpetstoredb
-    ```
+3. それでは実際にアプリにアクセスしてみましょう。アプリが表示されたら何度かリロードしてみてください
 
-6. レジストリーへのプッシュが完了したことを確認するために、IBM Cloud Container Registryに保存されたイメージの一覧を表示します。 
+   確認事項
 
-    ```bash
-    $ ibmcloud cr images
-    ```
+   * ３つのPodでアプリを稼働させており、何も設定していないため、リロードを行うことで別のHostname（Pod）が表示されてしまう
+
+   * Session情報を保持していないPodにアクセスがされてしまうためSession IDが変わってしまう（そのためAccess CountやValueも消えてしまいます）
+
+
+
+## 3. Session Affinityを利用したアプリの実行
+
+複数Podで運用した場合でも前回アクセスした同じPodにアクセスが行くようにしてみましょう
+
+1. webapp-in-memory.yamlを書き換えます（sessionAffinity: ClientIPのコメントアウトを外します）
+
+   ```
+   # 変更前
+   
+   apiVersion: v1
+   kind: Service
+   metadata:
+     labels:
+       app: inmemory
+     name: inmemory
+   spec:
+   	...
+     selector:
+       app: inmemory
+     type: NodePort
+     # sessionAffinity: ClientIP 
+   
+   
+   # 変更後
+   
+   apiVersion: v1
+   kind: Service
+   metadata:
+     labels:
+       app: inmemory
+     name: inmemory
+   spec:
+   	...
+     selector:
+       app: inmemory
+     type: NodePort
+     sessionAffinity: ClientIP 
+   
+   ```
+
+   
+
+2. webapp-in-memory.yamlを適用する
+
+3. アプリにアクセスし、何度かリロードを繰り返し、hostnameやAccess Count を見て同一のPodにアクセスしており、セッション情報が保持できていることを確認してください
+
+	> 補足1
+	>
+	> **killercodaをご利用の場合 (NodePortでのサービス公開)**
+	>
+	> 1. `kubectl get service inmemory`を実行し、NodePortのPortを確認します。
+	>
+	> 2. killercodaの画面にて、メニュー＞Trafficを開き、Custom PortsにNode PortのPortを指定しアプリにアクセス、表示されることを確認します。
+	>
+	> 詳細な方法はLab1を参照してください。
+	>
+	> **IKSをご利用の場合 -  (Ingressでのサービス公開)**
+	>
+	> //TODO
+	>
+	> 
+	
+	> 補足2
+	>
+	> NodePortを利用したService公開を行っているため、今回はClientIPを利用したスティッキー・セッションの設定を行っています。Ingressを利用したService公開ではCookieベースでのスティッキー・セッションの設定が行えます
+
+
+
+
+
+## 4. Redis版のアプリを１Pod＋Redisで起動させ正常な動作を確認
+
+1. まずはRedisをKubernetesにデプロイしましょう
+
+   ```
+   $ kubectl apply -f redis.yaml
+   
+   deployment.apps/redis created
+   service/redis created
+   
+   
+   $ kubectl get -f redis.yaml
+   
+   NAME                    READY   UP-TO-DATE   AVAILABLE   AGE
+   deployment.apps/redis   1/1     1            1           47s
+   
+   NAME            TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+   service/redis   ClusterIP   10.99.204.63   <none>        6379/TCP   47s
+   
+   ```
+
+   > 補足情報
+   >
+   > RedisをClusterIP TypeにてServiceで公開しているため、同じNamespace内のPodからはServiceの名前 redis をHostnameとしてRedisにアクセスすることができます
+
+2. セッション情報の管理にRedisを利用するWebアプリをデプロイしましょう
+
+   ```
+   $ kubectl apply -f webapp-redis.yaml
+   
+   deployment.apps/redisapp created
+   service/redisapp created
+   
+   
+   $ kubectl get -f webapp-redis.yaml
+   
+   NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+   deployment.apps/redisapp   0/1     1            0           8s
+   
+   NAME               TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+   service/redisapp   NodePort   10.105.80.90   <none>        8080:30002/TCP   8s
+   ```
+
+   
+
+3. デプロイとサービス作成が完了したので、NodePort（ポート番号　30002）を利用してアプリにアクセスしてみましょう
+
+   > 補足情報
+   >
+   > セッション情報はRedisに保管されているためInMemoryタイプと異なり、アプリが再作成されても情報は保持されます
+   >
+   > アプリを再作成する場合は以下の手順を実行してみてください
+   >
+   > $ kubectl delete -f webapp-redis.yaml
+   >
+   > $ kubectl apply -f webapp-redis.yaml
+
+
+
+## 5. Redis版のアプリをReplicas 3にして正常に動作することを体験
+
+1. それでは最後に、Redis版のアプリのReplicas を３に設定し、複数Podでもセッションが保持されたままアプリが利用できるか確認してみましょう
+
+   webapp-redis.yamlを変更
+
+   ```
+   # 変更前
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     labels:
+       app: redisapp
+     name: redisapp
+   spec:
+     replicas: 1 # 3
+     selector:
+       matchLabels:
+         app: redisapp
+         
+     
+   # 変更後
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     labels:
+       app: redisapp
+     name: redisapp
+   spec:
+     replicas: 3
+     selector:
+       matchLabels:
+         app: redisapp
+   ```
+
+   
+
+2. webapp-redis.yamlを適用する
+
+   ```
+   $ kubectl apply -f webapp-redis.yaml
+   
+   controlplane $ kubectl apply -f webapp-redis.yaml 
+   deployment.apps/redisapp configured
+   
+   
+   # podのappラベルでフィルターしてPodの状況を確認する
+   $ kubectl get pod -l app=redisapp
+   
+   NAME                        READY   STATUS    RESTARTS   AGE
+   redisapp-5967964864-2p2q5   1/1     Running   0          3m23s
+   redisapp-5967964864-2p6td   1/1     Running   0          10m
+   redisapp-5967964864-qz4mc   1/1     Running   0          3m22s
+   
+   ```
+
+   
+
+3. アプリにアクセスし、何度かリロードを繰り返し、hostnameが変わること（複数のPodに分散してアクセスしていること）を確認の上、Access CountやSession IDが同一なこと（セッション情報が引き継がれている）を確認しましょう
+
+![app-redis.png](./images/app-redis.png)
+
+
+
+## 最後に
+
+**Labで作成したK8sリソースを以下のコマンドを削除** します。
+
+```
+kubectl delete -f webapp-in-memory.yaml
+kubectl delete -f redis.yaml
+kubectl delete -f webapp-redis.yaml
+```
+
+
+
+以上でLabは終了です
+
+
+

@@ -1,205 +1,177 @@
-# Lab5) コンテナアプリケーションとWatson APIとの連携
+# Lab4) Helm チャートを使用したアプリケーションのデプロイ
 
-```diff
-- 注意) 本Labで利用するIBM Watson Visual Recognitionは、現在利用できません。
--   2021年1月7日より、該当サービスはIBM Cloud カタログから削除され、
--   ライトプランの新規インスタンス作成ができなくなっているためです。
-```
+Lab4では、Kubernetesのパッケージング技術の1つである [Helm](https://helm.sh/) を利用したデプロイの方法を学びます。
+Helm チャートと呼ばれる定義ファイルを使用すると，アプリケーションの定義やインストール，アップグレードを容易に行うことができます。
 
-このLabではクラウドサービスや外部APIをKubernetesから呼び出す方法について学びます。
+ここで実施する作業は1つです。
 
-フロント用Webアプリケーションと，画像イメージを格納したDBから成る`JpetStore`アプリケーションに対して機能拡張をしていきます。
-具体的には，入力画像を画像認識して，JpetStoreのDB内に類似画像が存在するかどうかを応答として返してくれる機能を追加します。
+- **Helmチャートを使用して `JpetStore`アプリケーションをデプロイする**
 
-この追加機能は新しいマイクロサービス`MMSSearch`として実装したものを使用し，IBM Cloudの画像認識サービス([Watson Visual Recognition](https://www.ibm.com/watson/services/visual-recognition/))に連携させて実現します。
+`JpetStore`はECサイトを模したサンプルアプリケーションです。
 
->補足:
-> `MMSSearch`はGo言語で書かれた画像認識機能をもつ(外部サービスを呼び出す)チャットアプリケーションです。
+`フロントのWebアプリケーション(Webコンテナ)`と，`動物の画像を格納するDB(DBコンテナ)`で構成されます。今回はいずれもDockerHub上にコンテナイメージとして準備済ですのでビルド作業は行いません。
 
-![](images/mmssearch-architecture-rev.png)
+また，Helmチャートも事前に用意しています。Helmチャートを取得した後に，`helm install xxx`することでアプリケーションをデプロイできます。
 
-ここで実施する作業は以下の3つです。
-
-- 1) IBM Cloud Visual Recognitionサービスの作成 (以降，VRサービス)
-- 2) VRサービスにアクセスするためのAPI KeyをKuberneteリソースのSecretとして作成
-- 3) `MMSSearch`アプリケーションのデプロイ
-
-## 1) Visual Recognitionサービスの作成
-
-1. ブラウザで [IBM Cloudのカタログページ](https://cloud.ibm.com/catalog/) にアクセスし，「AI」カテゴリにある「Visual Recognition」を選択します。
-
-  ![](images/catalog.png)
-
-2. 以下のように設定されていることを確認して，「作成」をクリックしてサービスインスタンスを作成します。
-  
-  - サービス名: `Visual Recognition-xxx(ユニーク値)`
-  - デプロイする地域: `ダラス(Dallas)`
-  - リソース・グループの選択: `Default`
-  - タグ: `(空欄)`
-  - サービスプラン: `ライト（Lite）`
-
-  >補足:  
-  > 下図はイメージです。デフォルトで上記の値が埋め込まれていますので「作成」をクリックしてください（万一異なる設定となっている場合は上記のように変更してください。）
-  > 
-  > ![](images/createvr.png)
-  > 
-
-3. API呼び出しをするために必要な **API Key** を取得します。
-
-  VRサービスが作成されると画面が自動遷移し，サービスの詳細画面が表示されます。
-  
-  下図を参考に「管理」メニューを開いて **API Key** をコピーしておいてください。
-  
-  ![](images/vr_apikey.png)
-
-## 2) VRサービスにアクセスするためのAPI KeyをKuberneteリソースの`Secret`として作成
-
-4. `Secret`を作成するための事前準備として，API Keyを外部ファイルとして用意します。
-
-  テンプレートファイル **mms-secrets.json.template** を使用して， **mms-secrets.json** ファイルを作成します。
-  
-  実行例:
-
-  ```bash
-  jpetstore-kubernetes-compact/mmssearcｈ ディレクトリで操作します。
-  $ cp mms-secrets.json.template mms-secrets.json
-  ```
-
-5. `mms-secrets.json` にVRサービスのAPI Keyを貼り付けます。
-
-  **mms-secrets.json**  を任意のエディタで開いて，以下を参考にVRサービスのAPI Keyを指定します。
-
-  ```json
-  {
-    "watson":
-    {
-      "url": "https://gateway.watsonplatform.net/visual-recognition/api",
-      "note": "It may take up to 5 minutes for this key to become active",
-      "api_key": "XXXXXX 自身のVRサービスのAPI Keyを貼り付ける XXXXXX"
-    }
-  }
-  ```
-
-6. 手順5.で用意した`mms-secrets.json`を元にKuberenetesリソースのSecretを生成します。
-
-  `kubectl create secret`コマンドで作成します。
-
-  実行例: 
-
-  ```bash
-  jpetstore-kubernetes-compact/mmssearchで操作します。
-  $ kubectl create secret generic mms-secret --from-file=mms-secrets=./mms-secrets.json
-  secret/mms-secret created
-  ```
-
-  `mms-secret`という名前で`Secret`が生成されました。  
-
-  >補足1:  
-  > 生成されたSecretは以下のように確認できます。
-  > 
-  > 実行例:
-  > 
-  > ```bash
-  > $ kubectl get secret mms-secret -o yaml
-  > apiVersion: v1
-  > data:
-  >  mms-secrets: ewogICJ3YXRzb24iOgogIHsKICAgICJ1cmwiOiAiaHR0cHM6Ly9nYXRld2F5LndhdHNvbnBsYXRmb3JtLm5ldC92aXN1YWwtcmVjb2duaXRpb24vYXBpIiwKICAgICJub3RlIjogIkl0IG1heSB0YWtlIHVwIHRvIDUgbWludXRlcyBmb3IgdGhpcyBrZXkgdG8gYmVjb21lIGFjdGl2ZSIsCiAgICAiYXBpX2tleSI6ICJ5cGtQNDhScUhfci1NMTdPRm4xV0p5bEtzVXZnNnc1RFFwOXBlMy1fMWRfSSIgCiAgfQp9Cg==
-  > kind: Secret
-  > metadata:
-  >   creationTimestamp: 2019-02-14T10:29:03Z
-  >   name: mms-secret
-  >   namespace: default
-  >   resourceVersion: "34546"
-  >   selfLink: /api/v1/namespaces/default/secrets/mms-secret
-  >   uid: 59cbcc9e-3043-11e9-9576-227f65586521
-  > type: Opaque
-  > ```
-  > 
-  > `data.mms-secrets:` にAPI Keyの情報が含まれています。Base64でエンコードされるため機密性を高く保つことができます。
-  > 
-  > 
-  >補足2:  
-  > 外部サービスを呼び出すためにはAPI KeyやユーザID/パスワードが必要となりますが，これらの情報はアプリケーションとは切り離して別の設定ファイルとして管理することが推奨されています。例えば，アプリケーションコードと一緒に機密性の高い情報をGitレポジトリ上に置くことが推奨されないことは理解しやすいかと思います。他にも管理負荷を下げるためにも分離した方が良いとされています。
-  > 
-  > ちなみに、Kubernetesで認証情報など設定系の情報を管理する方法としては`ConfigMap`や`Secret`を使用する方法があります。API Keyのような機密性の高い情報は`Secret`を使用することが推奨されています。ConfigMapとして生成した場合は暗号化されず平文のまま値が格納されてしまうためです。
-  > 
-  > 
-  >補足3:  
-  > IBM Cloud CLIを使ったSecretの生成
-  > 
-  > IBM Cloudでは、KubernetesクラスターとIBM Cloudのサービスの接続を容易にするためのコマンド`ibmcloud ks cluster-service-bind`が用意されています。この方法でも`Secret`を作成できます。詳しくは[こちら](https://cloud.ibm.com/docs/containers/cs_integrations.html#adding_cluster)を参照してください。 
+> ご自身でコンテナイメージのビルドから実施したい場合は，末尾のセクション `## 参考2: 自身でイメージビルドする方法` をご覧ください。
 
 
-## 3) `MMSSearch`アプリケーションのデプロイ
+## 事前準備
 
-7. Helm チャートを使用してMMSSearchアプリケーションをデプロイします。
+helmのバージョン確認とレリポジトリの登録・更新
 
-  `helm install`コマンドを使用します。
-  
-  MMSSearchのDeployment/Serviceなどを作成するHelmチャートは，`jpetstore-kubernetes-compact/helm`ディレクトリに準備しています。
-  
-  実行例:
-  
-  ```bash
-  helmディレクトリー移動 (jpetstore-kubernetes-compact/helm)
-  $ cd helm
+* helm のバージョン確認
 
-  MMSSearchアプリのデプロイ
-  $ helm install mmssearch ./mmssearch/
-  ```
+    `helm version`コマンドでインストールされているhelmのバージョンが**v3.0.2以上**で有ることを確認します
 
-  >補足1:  
-  > Podのステータスを確認してみます。
-  > 
-  > ```bash
-  > $ kubectl get pod -l app=mmssearch-mmssearch
-  > NAME                                   READY   STATUS    RESTARTS   AGE
-  > mmssearch-mmssearch-55b789857d-k8mwn   1/1     Running   0          2m
-  > ```
-  >
-  > さらに`jpetstoreアプリ`と`mmssearchアプリ`に関連するKubernetesリソースをまとめて確認してみましょう。
-  > 
-  > ```bash
-  > kubectl get all
-  > NAME                                                     READY   STATUS    RESTARTS   AGE
-  > pod/jpetstore-modernpets-jpetstoredb-7dd76668b5-crtql    1/1     Running   0          8m
-  > pod/jpetstore-modernpets-jpetstoreweb-6d49474455-6j2j2   1/1     Running   0          8m
-  > pod/jpetstore-modernpets-jpetstoreweb-6d49474455-tjc6g   1/1     Running   0          8m
-  > pod/mmssearch-mmssearch-55b789857d-k8mwn                 1/1     Running   0          4m
-  > 
-  > NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
-  > service/db           ClusterIP   172.21.240.192   <none>        3306/TCP         8m
-  > service/kubernetes   ClusterIP   172.21.0.1       <none>        443/TCP          1d
-  > service/mmssearch    NodePort    172.21.19.130    <none>        8080:31417/TCP   4m
-  > service/web          NodePort    172.21.214.98    <none>        80:32025/TCP     8m
-  > 
-  > NAME                                                DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
-  > deployment.apps/jpetstore-modernpets-jpetstoredb    1         1         1            1           8m
-  > deployment.apps/jpetstore-modernpets-jpetstoreweb   2         2         2            2           8m
-  > deployment.apps/mmssearch-mmssearch                 1         1         1            1           4m
-  > 
-  > NAME                                                           DESIRED   CURRENT   READY   AGE
-  > replicaset.apps/jpetstore-modernpets-jpetstoredb-7dd76668b5    1         1         1       8m
-  > replicaset.apps/jpetstore-modernpets-jpetstoreweb-6d49474455   2         2         2       8m
-  > replicaset.apps/mmssearch-mmssearch-55b789857d                 1         1         1       4m
-  
-  以上でMMSSearchアプリがデプロイされました。
+    実行例:
+    ```bash
+    $ helm version
+    version.BuildInfo{Version:"v3.0.2", GitCommit:"19e47ee3283ae98139d98460de796c1be1e3975f", GitTreeState:"clean", GoVersion:"go1.13.5"}
+    ```
+
+    > helm v2にて必要だったTillerが、helm v3では必要なくなり、Client-only architectureとなりました。
+    > https://developer.ibm.com/blogs/kubernetes-helm-3/
 
 
-  >補足2:  
-  > yamlファイルを使用してデプロイする場合は以下のようになります。(**今回は実施しません**)
-  > 
-  > ```bash
-  > #jpetstore-kubernetes-compact/jpetstore ディレクトリに移動
-  > $ cd jpetstore
-  > $ kubectl apply -f jpetstore-watson.yaml
-  > service "mmssearch" created
-  > deployment.extensions "mmssearch" created
-  > ```
+* helmリポジトリの登録と更新
 
-## 動作確認
+    helm 公式リポジトリの登録と情報更新を行います。
+    > 今回は利用しませんが、行っておくと便利です
 
-8. ブラウザ上でアプリケーションの動作を確認します。
+    実行例:
+    ```bash
+    $ helm repo add stable https://charts.helm.sh/stable
+    $ helm repo update
+    Hang tight while we grab the latest from your chart repositories...
+    ...Successfully got an update from the "stable" chart repository
+    Update Complete. ⎈ Happy Helming!⎈
+    ```
+    
+
+## Helmチャートを使用して `JpetStore`アプリケーションをデプロイする
+
+1. ハンズオン用のJpetStoreリポジトリをクローンします。(Lab5でも使用します)
+    
+    `git`コマンドでクローンします。
+
+    実行例:
+    
+    ```bash
+    $ git clone https://github.com/ibm-cloud-labs/jpetstore-kubernetes-compact.git --depth 1
+    ```
+        
+2. Helmチャートの中身を確認します。
+
+    `JpetStore`アプリケーションをデプロイするためのHelmチャートは`jpetstore-kubernetes-compact/helm/modernpets`ディレクトリに入っています。
+    
+
+    実行例:
+    
+    ```bash
+    $ cd jpetstore-kubernetes-compact/helm
+    $ tree .
+    .
+    ├── mmssearch
+    │   ├── Chart.yaml
+    │   ├── README.md
+    │   ├── ics-values.yaml
+    │   ├── templates
+    │   │   ├── NOTES.txt
+    │   │   ├── _helpers.tpl
+    │   │   ├── deployment.yaml
+    │   │   ├── ingress.yaml
+    │   │   └── service.yaml
+    │   ├── values-icp.yaml
+    │   └── values.yaml
+    └── modernpets
+        ├── Chart.yaml
+        ├── templates
+        │   ├── NOTES.txt
+        │   ├── _helpers.tpl
+        │   ├── deployment.yaml
+        │   └── service.yaml
+        ├── values-icp.yaml
+        └── values.yaml
+
+    4 directories, 17 files
+    ```
+
+    上記出力結果に含まれるファイルを使用することで，
+    `JpetStore`アプリケーションをK8s上で動作させるために必要な`Deployment`や`Service`などのyamlを生成(して，K8sクラスターにデプロイ)することができます。
+
+    >補足:  
+    > 各yamlファイルの中身の確認はここではしませんが，後続のハンズオンで新規にサンプルのHelmチャートを作って紐解いていきます。
+    > 
+    > 興味のある方は，[Lab6](../Lab6/)を参照ください。
+    > 
+
+3. JpetStoreアプリケーションをデプロイします。
+
+    `helm install xxx`コマンドでHelmチャートを使用すると，JpetStoreアプリの`Webコンテナ`と`DBコンテナ`がデプロイされます。
+    
+    実行例:
+    
+    ```bash
+    jpetstore-kubernetes-compact/helmディレクトリで操作します。
+    $ cd ../helm
+    $ helm install jpetstore ./modernpets/
+    
+    デプロイできたか確認
+    $ helm list
+    NAME     	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART           	APP VERSION
+    jpetstore	default  	1       	2020-01-24 14:40:28.405356 +0900 JST	deployed	modernpets-0.1.5	1.0
+    
+    デプロイされたPodを確認します。
+    $ kubectl get pods
+    NAME                                                 READY   STATUS    RESTARTS   AGE
+    jpetstore-modernpets-jpetstoredb-7dd76668b5-sl6br    1/1     Running   0          1h
+    jpetstore-modernpets-jpetstoreweb-6d49474455-7wm85   1/1     Running   0          1h
+    jpetstore-modernpets-jpetstoreweb-6d49474455-tbww6   1/1     Running   0          1h
+    ```
+
+    上記出力から，Webコンテナ(`jpetstoreweb`)のPodが2つ，DBコンテナ(`jpetstoredb`)のPodが1つがデプロイされていることが分かります。
+    
+    >補足:  
+    > 自分のコンテナイメージを使用する場合は，`helm/modernpets/values.yaml`の`repository`部分を `<MYREGISTRY>/<MYNAMESPACE>`に置き換えます。
+    
+4. DeploymentやServiceについても確認します。
+    
+    実行例:
+
+    ```bash
+    $ kubectl  get all
+    NAME                                                     READY   STATUS    RESTARTS   AGE
+    pod/jpetstore-modernpets-jpetstoredb-7dd76668b5-sl6br    1/1     Running   0          1h
+    pod/jpetstore-modernpets-jpetstoreweb-6d49474455-7wm85   1/1     Running   0          1h
+    pod/jpetstore-modernpets-jpetstoreweb-6d49474455-tbww6   1/1     Running   0          1h
+    
+    NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+    service/db           ClusterIP   172.21.203.103   <none>        3306/TCP       1h
+    service/kubernetes   ClusterIP   172.21.0.1       <none>        443/TCP        2d
+    service/web          NodePort    172.21.243.99    <none>        80:31918/TCP   1h
+    
+    NAME                                                DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+    deployment.apps/jpetstore-modernpets-jpetstoredb    1         1         1            1           1h
+    deployment.apps/jpetstore-modernpets-jpetstoreweb   2         2         2            2           1h
+    
+    NAME                                                           DESIRED   CURRENT   READY   AGE
+    replicaset.apps/jpetstore-modernpets-jpetstoredb-7dd76668b5    1         1         1       1h
+    replicaset.apps/jpetstore-modernpets-jpetstoreweb-6d49474455   2         2         2       1h
+    ```    
+    
+    Webコンテナ(`jpetstoreweb`)，DBコンテナ(`jpetstoredb`)それぞれの **Deployment** と **Service** も作成されていることが分かります。
+    
+    通常は，今回のシンプルなケースであっても以下のyamlファイルを用意し，順にデプロイしていく必要があります。
+
+        - `web-deployment.yaml`
+        - `web-service.yaml`
+        - `db-deployment.yaml`
+        - `db-service.yaml`
+
+    このようにHelmチャートを使うことで、一括デプロイやロールバックなどの管理がやりやすくなります。
+    
+5. ブラウザ上でアプリケーションの動作を確認します。
 
     ブラウザで`<Public IP>:<NodePort>`を開きます。
     
@@ -207,69 +179,127 @@
     > ワーカーノードの `Public IP` は以下のように確認します。
     > 
     > ```bash
-    > $ ibmcloud ks workers mycluster
+    > $ ibmcloud ks worker ls --cluster mycluster
     > OK
     > ID                                                 Public IP       Private IP      Machine Type   State    Status   Zone    Version
     > kube-hou02-pa705552a5a95d4bf3988c678b438ea9ec-w1   184.173.52.92   10.76.217.175   free           normal   Ready    hou02   1.10.12_1543
     > ```
+    > 
     > `NodePort` は以下のように確認します。
     > 
     > ```bash
-    > $ kubectl get service mmssearch
-    > NAME        TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
-    > mmssearch   NodePort   172.21.19.130   <none>        8080:31417/TCP   19m
+    > $ kubectl get service
+    > NAME         TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+    > db           ClusterIP   172.21.203.103   <none>        3306/TCP       1h
+    > kubernetes   ClusterIP   172.21.0.1       <none>        443/TCP        2d
+    > web          NodePort    172.21.243.99    <none>        80:31918/TCP   1h
     > ```
     > 
     > 上記の出力例の場合の `<Public IP>:<NodePort>`は，次のようになります。
-    > 
     > - Public IP: `184.173.52.92`
-    > - NodePort: `31417`
+    > - NodePort: `31918`
     > 
-    > したがって，ブラウザ上で `184.173.52.92:31417` にアクセスするとアプリケーションが開きます。
+    > したがって，ブラウザ上で `184.173.52.92:31918` にアクセスするとアプリケーションが開きます。
 
-
-    ブラウザで`<クラスターのPublic IP>:<ポート>`にアクセスしてください。
+    ページ内のリンクをドリルダウンして，動物画像を開いてみてください。正常に動作していれば以下図のように確認できます。
     
-    `jpetstore-kubernetes-compact/pet-images`ディレクトリにある動物の画像をアップロードすると，Watson Visual Recognitionによる画像認識が行われ，認識した結果（動物の種類）が`JpetStore`データベースに登録されている動物かどうかが返ってきます。
+    ![](images/petstore.png)
 
-   ![](images/webchat.png)
+以上でLab4は終了です。  
+最後のハンズオンは[Lab5](../Lab5/)です。
 
-以上でコンテナアプリケーションとWatson APIを連携させる操作は完了です。
 
-最後に， **Lab5で作成したK8sリソースを以下のコマンドで削除** します。
+******
 
-  ```bash
-  1) Lab4, 5でデプロイした2つのアプリを削除します。
-  $ helm uninstall jpetstore
-  $ helm uninstall mmssearch
-  
-  2) クラスターに保存されているSecretを削除します。
-  $ kubectl delete secret mms-secret
-  ```
-  
-次のハンズオンはこちら [Lab6](../Lab6/README.md) です。
+## 参考1: YAMLファイルを使用したデプロイ (今回は実施しません。)
 
-*******
+  JpetStoreアプリのyamlファイルは， `jpetstore-kubernetes-compact/jpetstore` ディレクトリ配下にあります。
 
-### 参考: Kubernetes上のアプリケーションから外部サービスを呼び出すためのマニフェストファイルの設定について
+    実行例: 
 
-実際にアプリケーションから読み出す方法は`Secret`を**Volumeとしてマウント**する方法と，**環境変数として参照**する方法があります。
-`MMSSearch`では以下のようにVolumeとしてマウントする方法で実装されています。
+    ```bash
+    jpetstore-kubernetes-helm/jpetstore ディレクトリで操作します。
+    $ kubectl apply -f jpetstore.yaml
+    deployment.extensions "jpetstoreweb" created
+    service "web" created
+    deployment.extensions "jpetstoredb" created
+    service "db" created
+    ```
 
-```yaml
-    #中略
-    spec:
-        volumeMounts:
-         - name: service-secrets
-           mountPath: "/etc/secrets"
-           readOnly: true
-      volumes:
-      - name: service-secrets
-        secret:
-          secretName: mms-secret
-          items:
-          - key: mms-secrets
-            path: mms-secrets.json
-```
+    >補足:  
+    > 自分のコンテナイメージを使用する場合は`jpetstore/jpetstore.yaml`の`image`セクションを `<MYREGISTRY>/<MYNAMESPACE>`に置き換えます。
 
->mms-secretという名前のsecret(`secretName: mms-secret`)が`/etc/secret`に`mms-secrets.json`としてマウントされます。アプリケーションはこのファイル経由でsecretを参照します。
+## 参考2: 自身でイメージビルドする方法
+
+1. ソースコードを入手します。
+
+    ```bash
+    $ git clone https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone.git
+    $ cd jpetstore-kubernetes
+    ```
+
+    > 補足:  
+    > フォルダーの構成
+    > クローンしたリポジトリは以下のファイルから構成されています。
+    > 
+    > | フォルダー | 説明 |
+    > | ---- | ----------- |
+    > |[**jpetstore**](https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone/tree/master/jpetstore)| Javaでかかれたペットショップのアプリケーション |
+    > |[**mmssearch**](https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone/tree/master/mmssearch)| GOで実装された画像認識機能付きチャットアプリ |
+    > |[**helm**](https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone/tree/master/helm)| KubernetesにデプロイするためのHelm チャート |
+    > |[**pet-images**](https://github.com/ibm-cloud-labs/jpetstore-kubernetes-allinone/tree/master/pet-images)| チャットアプリの動作確認用の動物画像ファイル |
+
+
+ここでは，ビルドしたコンテナイメージの置き場としてIBM Cloud Container Registryを使用します。  
+もちろんDockerHubやご自身のプライベートレジストリーを使用することもできます。その場合は`<MYREGISTRY>`部分を適宜置き換えてください。
+
+2. レジストリーの **Namespace** を設定します。
+
+    以下のコマンドを実行すると`Namespace`の一覧が表示されます。
+
+    ```bash
+    $ ibmcloud cr namespaces
+    ```
+
+    既存の`Namespace`がなく，新規に作成する場合は以下のコマンドを実行してください。
+    
+    ```bash
+    $ ibmcloud cr namespace-add <NAMESPACE>
+    ```
+
+3. **Container Registry** (e.g. registry.ng.bluemix.net) の情報を確認します。
+
+    ```bash
+    Container Registry                us.icr.io
+    Container Registry API endpoint   https://us.icr.io/api
+    IBM Cloud API endpoint            https://cloud.ibm.com
+    IBM Cloud account details         Hoge Fuga Account (xxxxxxxxxxxxxxxxx)
+    IBM Cloud organization details     ()
+    ```
+
+4. **jpetstoreweb** イメージをビルドし，レジストリーにプッシュします。 
+
+    ```bash
+    jpetstore-kubernetes-allinone/jpetstoreディレクトリで操作します。
+    $ cd jpetstore
+    $ docker build . -t <MYREGISTRY>/<MYNAMESPACE>/jpetstoreweb
+    $ docker push <MYREGISTRY>/<MYNAMESPACE>/jpetstoreweb
+    ```
+
+   >補足:  
+   > `Unauthorized ` と表示された場合は`ibmcloud cr login` を実行してIBM Cloudにログインしてください。
+
+5. 同様に， **jpetstoredb** イメージをビルドします。
+
+    ```bash
+    jpetstore-kubernetes-allinone/jpetstore/dbディレクトリで操作します。
+    $ cd db
+    $ docker build . -t <MYREGISTRY>/<MYNAMESPACE>/jpetstoredb
+    $ docker push <MYREGISTRY>/<MYNAMESPACE>/jpetstoredb
+    ```
+
+6. レジストリーへのプッシュが完了したことを確認するために、IBM Cloud Container Registryに保存されたイメージの一覧を表示します。 
+
+    ```bash
+    $ ibmcloud cr images
+    ```

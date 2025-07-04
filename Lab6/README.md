@@ -1,421 +1,275 @@
-# Lab6) サンプル・チャートでHelmを理解する
+# Lab5) コンテナアプリケーションとWatson APIとの連携
 
-Lab6では、Helmの理解のために、サンプルのチャートを作ってKubernetesにデプロイします。
-チャートの構造を理解することで、提供されるチャートをただ使うのではなく、理解した上で利用できるようになります。
-
-## チャートを作るための参考資料
-Helmの公式サイトにチャート開発のためのドキュメントがまとめられています。
-
-- https://helm.sh/docs/community/developers/
-- https://helm.sh/docs/chart_template_guide/
-- https://helm.sh/docs/chart_best_practices/
-
-## Helmのバージョン確認
-このガイドはv3.6.2ベースで記載しています。より古いバージョンを利用されている場合はバージョンを変更してください。
-
-  ```bash
-  $ helm version
-  version.BuildInfo{Version:"v3.6.2", GitCommit:"ee407bdf364942bcb8e8c665f82e15aa28009b71", GitTreeState:"dirty", GoVersion:"go1.16.5"}
-  ```
-
-## チャートの作成
-チャートの雛形を作成してみます。任意の作業ディレクトリで以下のコマンドを実行してください。
-
-  ```bash
-  任意のディレクトリでhelm createコマンドを実行します。
-  $ helm create mychart
-  Creating mychart
-  ```
-   
-できあがるディレクトリの構造は以下の通りです:
-   
-  ```bash
-  mychart
-  ├── Chart.yaml                     # チャートの情報を含むyaml
-  ├── charts                         # このチャートが依存するチャートを格納するディレクトリー
-  ├── templates                      # マニフェストのテンプレートを格納するディレクトリー
-  │   ├── NOTES.txt                  # OPTIONAL: チャートの使用方法を記載したプレーンテキスト
-  │   ├── _helpers.tpl               # 
-  │   ├── hpa.yaml                   # HPA作成用のyaml
-  │   ├── deployment.yaml            # Deployment作成用のyaml
-  │   ├── ingress.yaml               # Ingress設定用のyaml
-  │   ├── service.yaml               # Service作成用のyaml
-  │   ├── serviceaccount.yaml        # serviceAccount作成用のyaml
-  │   └── tests
-  │       └── test-connection.yaml
-  └── values.yaml                    # このチャートのデフォルト値を記載したyaml
-  ```
-
-## deployment.ymlを紐解く
-作成されたtemplates/deployment.ymlをみてみましょう。
-Go Template言語で環境により異なる値が記載されています
-
-  ```bash
-  $ cat mychart/templates/deployment.yaml 
-  apiVersion: apps/v1
-  kind: Deployment
-  metadata:
-    name: {{ include "mychart.fullname" . }}
-    labels:
-      {{- include "mychart.labels" . | nindent 4 }}
-  spec:
-    replicas: {{ .Values.replicaCount }}
-    selector:
-      matchLabels:
-        {{- include "mychart.selectorLabels" . | nindent 6 }}
-    template:
-      metadata:
-        labels:
-          {{- include "mychart.selectorLabels" . | nindent 8 }}
-      spec:
-      {{- with .Values.imagePullSecrets }}
-        imagePullSecrets:
-          {{- toYaml . | nindent 8 }}
-      {{- end }}
-        serviceAccountName: {{ include "mychart.serviceAccountName" . }}
-        securityContext:
-          {{- toYaml .Values.podSecurityContext | nindent 8 }}
-        containers:
-          - name: {{ .Chart.Name }}
-            securityContext:
-              {{- toYaml .Values.securityContext | nindent 12 }}
-            image: "{{ .Values.image.repository }}:{{ .Chart.AppVersion }}"
-  :
-  (以下省略)
-  ```
-
-{{ .Values.<変数名> }}となっている部分はvalues.yamlにあるデフォルト値が埋め込まれます。
-以下の設定の場合、例えばvalues.yamlにあるreplicaCountという設定項目が上記のdeployment.ymlのレプリカ数を指定する項目(spec.replicas)に反映されます。
-
-  ```
-  $ cat mychart/values.yaml 
-  # Default values for mychart.
-  # This is a YAML-formatted file.
-  # Declare variables to be passed into your templates.
-
-  replicaCount: 1
-
-  image:
-    repository: nginx
-    pullPolicy: IfNotPresent
-
-  imagePullSecrets: []
-  nameOverride: ""
-  fullnameOverride: ""
-
-  serviceAccount:
-    # Specifies whether a service account should be created
-    create: true
-    # The name of the service account to use.
-    # If not set and create is true, a name is generated using the fullname template
-    name:
-
-  podSecurityContext: {}
-    # fsGroup: 2000
-
-  securityContext: {}
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-    # runAsNonRoot: true
-    # runAsUser: 1000
-
-  service:
-    type: ClusterIP
-    port: 80
-  :
-  (以下省略)
-  ```
-
-## サンプル・チャートを利用する
-まずはこのままサンプルを利用してデプロイしてみましょう。
-「helm install <任意の名前> ＜チャート・ディレクトリー＞」を実行します。
-以下のような結果が出力されることを確認します。
-
-  ```bash
-  $ helm install sample ./mychart
-  NAME: sample
-  LAST DEPLOYED: Thu Jul 15 18:06:30 2021
-  NAMESPACE: default
-  STATUS: deployed
-  REVISION: 1
-  NOTES:
-  1. Get the application URL by running these commands:
-  export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=mychart,app.kubernetes.io/instance=sample" -o jsonpath="{.items[0].metadata.name}")
-  export CONTAINER_PORT=$(kubectl get pod --namespace default $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
-  echo "Visit http://127.0.0.1:8080 to use your application"
-  kubectl --namespace default port-forward $POD_NAME 8080:$CONTAINER_PORT
-  ```
-
-問題なくデプロイができたかは、以下のコマンドで確認します:
-
-  ```bash
-  $ helm ls
-  NAME  	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART        	APP VERSION
-  sample	default  	1       	2021-07-15 18:06:30.424957 +0900 JST	deployed	mychart-0.1.0	1.16.0
-  ```
-
-  ```bash
-  $ kubectl get pod
-  NAME                              READY   STATUS    RESTARTS   AGE
-  sample-mychart-7f54479764-gwllt   1/1     Running   0          78s
-  ```
-
-実際にアプリケーションにアクセスするために、「kubectl port-forward <Pod名> <任意のポート番号>:80」でポートフォワーディングします。
-
-   ```bash
-   $ kubectl port-forward sample-mychart-7f54479764-gwllt 8080:80
-   Forwarding from 127.0.0.1:8080 -> 80
-   Forwarding from [::1]:8080 -> 80
-   Handling connection for 8080
-   ```
-
-この状態で、Webブラウザから「 http://localhost:8080 」でアクセスすればサンプルのWebページが表示されます。
-
-## 設定を変更する
-では、次にIKSのフリークラスターに合わせ、KubernetesのNodePortで公開できるように、テンプレートを修正してみましょう。
-templates/service.yamlのspec.ports以下のnameの後に同じインデントで設定を３行追加しましょう。
-設定している内容はservice.typeがNodePortだった場合にNodePortのPortを指定ように記載しています
-
-  ```bash
-  $ cat mychart/templates/service.yaml 
-  apiVersion: v1
-  kind: Service
-  metadata:
-    name: {{ include "mychart.fullname" . }}
-    labels:
-      {{- include "mychart.labels" . | nindent 4 }}
-  spec:
-    type: {{ .Values.service.type }}
-    ports:
-      - port: {{ .Values.service.port }}
-        targetPort: http
-        protocol: TCP
-        name: http
-        {{- if .Values.service.nodePort }}          # 追加行
-        nodePort: {{ .Values.service.nodePort }}    # 追加行
-        {{- end}}                                   # 追加行
-    selector:
-      {{- include "mychart.selectorLabels" . | nindent 4 }}
-  ```
-  
-変更したらテンプレートの記載が正しいかのチェックを行います。「helm lint <helmチャートのディレクトリ>」を実行します。
-
-  ```bash
-  $ helm lint ./mychart/
-  ==> Linting ./mychart
-  [INFO] Chart.yaml: icon is recommended
-
-  1 chart(s) linted, 0 chart(s) failed
-  ```
-   
-次に設定した値を変更していきましょう。
-デフォルト値が定義されているvalue.yamlをコピーします。
-
-  ```bash
-  $ cp -p mychart/values.yaml value-new.yaml
-  ```
-
-コピーしたファイル(value-new.yaml)を開き、以下のようにserviceの項目にあるtypeの設定を修正、そしてnodePortの項目を追加します。
-
-  * 変更前
-    ```
-    service:
-      type: ClusterIP
-      port: 80
-    ```
-
-  * 変更後   
-    ```
-    service:
-      type: NodePort
-      port: 80
-      nodePort: 30001
-    ```
-
-上記の設定後、helm upgradeコマンドでhelmリリースを更新します。
-先ほどと同じように処理が実行されれば問題なく実行できています。
-
-  ```bash
-  $ helm upgrade -f value-new.yaml sample ./mychart/
-  Release "sample" has been upgraded. Happy Helming!
-  NAME: sample
-  LAST DEPLOYED: Thu Jul 15 18:14:13 2021
-  NAMESPACE: default
-  STATUS: deployed
-  REVISION: 2
-  NOTES:
-  1. Get the application URL by running these commands:
-  export NODE_PORT=$(kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services sample-mychart)
-  export NODE_IP=$(kubectl get nodes --namespace default -o jsonpath="{.items[0].status.addresses[0].address}")
-  echo http://$NODE_IP:$NODE_PORT
-  ```
-  
-今度は実際にNodePortでアクセスしてみましょう。「ibmcloud ks workers <クラスター名>」を実行し、パブリックIPアドレスを確認します。
-確認したあとで「http://<パブリックIPアドレス>:30001」でアクセスすれば、再びサンプルのアプリケーションにアクセスできます。
-
-  ```bash
-  $ ibmcloud ks workers --cluster mycluster
-  OK
-  ID                         パブリック IP     プライベート IP   マシン・タイプ   状態     状況    ゾーン   バージョン   
-  kube-hou02-xxxxxxxxxx-w1   184.xxx.x.xx    10.76.194.59    free             normal   Ready   hou02    1.10.12_1543 
-  ```
- 
-## リソースを追加する
-新しくConfig Mapを作成し、アプリケーションに反映させてみましょう。
-今回の例ではConfig Mapとしてnginxのindex.htmlのテンプレートを登録し、表示されるメッセージをhelmチャートのValueで変更できるようにします。
-
-まずは新しいhelmのvalueファイル (value-new.yaml)を開き、以下のようにapp.nameの設定を追加します。
-
-  ```bash
-  # value-new.yamlに設定追加 (serviceの項目の上にapp.nameを追加)
-
-  app:                   # この２行を追加します
-    name: IKS-san        # この２行を追加します
-
-  replicaCount: 1
-
-  image:
-    repository: nginx
-    tag: stable
-    pullPolicy: IfNotPresent
-  ```
-
-続いて、チャートのtemplatesディレクトリにindex-configmap.yamlを作成します。21行目がWebブラウザで確認できるメッセージの部分です。
-
-   ```bash
-   # 以下 mychart/templates/index-configmap.yamlの内容
-   
-   apiVersion: v1
-   kind: ConfigMap
-   metadata:
-     name: index-config 
-   data:
-     index-config: index.html 
-     index.html: |
-       <!DOCTYPE html>
-       <html>
-       <head>
-       <title>Welcome to nginx!</title>
-       <style>
-           body {
-               width: 35em;
-               margin: 0 auto;
-               font-family: Tahoma, Verdana, Arial, sans-serif;
-           }
-       </style>
-       </head>
-       <body>
-       <h1>Welcome to __NAME__</h1>
-       <p>If you see this page, the nginx web server is successfully installed and working. Further configuration is required.</p>
-
-       <p>For online documentation and support please refer to
-       <a href="http://nginx.org/">nginx.org</a>.<br/>
-       Commercial support is available at
-       <a href="http://nginx.com/">nginx.com</a>.</p>
-
-       <p><em>Thank you for using nginx.</em></p>
-       </body>
-       </html>
-   ```
-
-さらに、チャートのtemplatesディレクトリにあるdeployment.yamlを編集します。
-
-  ```bash
-  # 以下 mychart/templates/deployment.yamlの内容
-  apiVersion: apps/v1
-  kind: Deployment
-  metadata:
-    name: {{ include "mychart.fullname" . }}
-    labels:
-      {{- include "mychart.labels" . | nindent 4 }}
-  spec:
-    replicas: {{ .Values.replicaCount }}
-    selector:
-      matchLabels:
-        {{- include "mychart.selectorLabels" . | nindent 6 }}
-    template:
-      metadata:
-        labels:
-          {{- include "mychart.selectorLabels" . | nindent 8 }}
-      spec:
-      {{- with .Values.imagePullSecrets }}
-        imagePullSecrets:
-          {{- toYaml . | nindent 8 }}
-      {{- end }}
-        serviceAccountName: {{ include "mychart.serviceAccountName" . }}
-        securityContext:
-          {{- toYaml .Values.podSecurityContext | nindent 8 }}
-        volumes:
-        - name: index-config
-          configMap:
-            name: index-config
-        - name: config-volume
-          emptyDir: {}
-        initContainers:
-        - name: init-myservice
-          image: busybox
-          command: ['sh', '-c', 'cat /etc/config-template/index.html | sed "s/__NAME__/{{ .Values.app.name }}/" > /etc/config/index.html']
-          volumeMounts:
-          - name: config-volume
-            mountPath: /etc/config
-          - name: index-config
-            mountPath: /etc/config-template/index.html
-            readOnly: true
-            subPath: index.html
-        containers:
-          - name: {{ .Chart.Name }}
-            securityContext:
-              {{- toYaml .Values.securityContext | nindent 12 }}
-            image: "{{ .Values.image.repository }}:{{ .Chart.AppVersion }}"
-            imagePullPolicy: {{ .Values.image.pullPolicy }}
-            volumeMounts:
-            - name: config-volume
-              mountPath: /usr/share/nginx/html/
-            ports:
-              - name: http
-                containerPort: 80
-                protocol: TCP
-            livenessProbe:
-              httpGet:
-                path: /
-                port: http
-            readinessProbe:
-              httpGet:
-                path: /
-                port: http
-            resources:
-              {{- toYaml .Values.resources | nindent 12 }}
-        {{- with .Values.nodeSelector }}
-        nodeSelector:
-          {{- toYaml . | nindent 8 }}
-        {{- end }}
-      {{- with .Values.affinity }}
-        affinity:
-          {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-        tolerations:
-          {{- toYaml . | nindent 8 }}
-      {{- end }}
-  ```
-
-完了したら再びhelm upgradeで更新します。
-
-   ```bash
-   $ helm upgrade -f value-new.yaml sample ./mychart/
-   ```
-
-あとはWebブラウザでアクセスし、画面の結果を確認します。
-メッセージがhelmのvalueファイル (value-new.yaml)に指定した文字に変わっていれば問題なく動いていることが確認できます。
-
-## お片付け
-
-```bash
-1) helmで作成したリリースを削除します
-$ helm uninstall sample
-
-2) ハンズオンが終わったらクラスターを削除します
-$ ibmcloud ks cluster rm --cluster <クラスター名>
+```diff
+- 注意) 本Labで利用するIBM Watson Visual Recognitionは、現在利用できません。
+-   2021年1月7日より、該当サービスはIBM Cloud カタログから削除され、
+-   ライトプランの新規インスタンス作成ができなくなっているためです。
 ```
+
+このLabではクラウドサービスや外部APIをKubernetesから呼び出す方法について学びます。
+
+フロント用Webアプリケーションと，画像イメージを格納したDBから成る`JpetStore`アプリケーションに対して機能拡張をしていきます。
+具体的には，入力画像を画像認識して，JpetStoreのDB内に類似画像が存在するかどうかを応答として返してくれる機能を追加します。
+
+この追加機能は新しいマイクロサービス`MMSSearch`として実装したものを使用し，IBM Cloudの画像認識サービス([Watson Visual Recognition](https://www.ibm.com/watson/services/visual-recognition/))に連携させて実現します。
+
+>補足:
+> `MMSSearch`はGo言語で書かれた画像認識機能をもつ(外部サービスを呼び出す)チャットアプリケーションです。
+
+![](images/mmssearch-architecture-rev.png)
+
+ここで実施する作業は以下の3つです。
+
+- 1) IBM Cloud Visual Recognitionサービスの作成 (以降，VRサービス)
+- 2) VRサービスにアクセスするためのAPI KeyをKuberneteリソースのSecretとして作成
+- 3) `MMSSearch`アプリケーションのデプロイ
+
+## 1) Visual Recognitionサービスの作成
+
+1. ブラウザで [IBM Cloudのカタログページ](https://cloud.ibm.com/catalog/) にアクセスし，「AI」カテゴリにある「Visual Recognition」を選択します。
+
+  ![](images/catalog.png)
+
+2. 以下のように設定されていることを確認して，「作成」をクリックしてサービスインスタンスを作成します。
+  
+  - サービス名: `Visual Recognition-xxx(ユニーク値)`
+  - デプロイする地域: `ダラス(Dallas)`
+  - リソース・グループの選択: `Default`
+  - タグ: `(空欄)`
+  - サービスプラン: `ライト（Lite）`
+
+  >補足:  
+  > 下図はイメージです。デフォルトで上記の値が埋め込まれていますので「作成」をクリックしてください（万一異なる設定となっている場合は上記のように変更してください。）
+  > 
+  > ![](images/createvr.png)
+  > 
+
+3. API呼び出しをするために必要な **API Key** を取得します。
+
+  VRサービスが作成されると画面が自動遷移し，サービスの詳細画面が表示されます。
+  
+  下図を参考に「管理」メニューを開いて **API Key** をコピーしておいてください。
+  
+  ![](images/vr_apikey.png)
+
+## 2) VRサービスにアクセスするためのAPI KeyをKuberneteリソースの`Secret`として作成
+
+4. `Secret`を作成するための事前準備として，API Keyを外部ファイルとして用意します。
+
+  テンプレートファイル **mms-secrets.json.template** を使用して， **mms-secrets.json** ファイルを作成します。
+  
+  実行例:
+
+  ```bash
+  jpetstore-kubernetes-compact/mmssearcｈ ディレクトリで操作します。
+  $ cp mms-secrets.json.template mms-secrets.json
+  ```
+
+5. `mms-secrets.json` にVRサービスのAPI Keyを貼り付けます。
+
+  **mms-secrets.json**  を任意のエディタで開いて，以下を参考にVRサービスのAPI Keyを指定します。
+
+  ```json
+  {
+    "watson":
+    {
+      "url": "https://gateway.watsonplatform.net/visual-recognition/api",
+      "note": "It may take up to 5 minutes for this key to become active",
+      "api_key": "XXXXXX 自身のVRサービスのAPI Keyを貼り付ける XXXXXX"
+    }
+  }
+  ```
+
+6. 手順5.で用意した`mms-secrets.json`を元にKuberenetesリソースのSecretを生成します。
+
+  `kubectl create secret`コマンドで作成します。
+
+  実行例: 
+
+  ```bash
+  jpetstore-kubernetes-compact/mmssearchで操作します。
+  $ kubectl create secret generic mms-secret --from-file=mms-secrets=./mms-secrets.json
+  secret/mms-secret created
+  ```
+
+  `mms-secret`という名前で`Secret`が生成されました。  
+
+  >補足1:  
+  > 生成されたSecretは以下のように確認できます。
+  > 
+  > 実行例:
+  > 
+  > ```bash
+  > $ kubectl get secret mms-secret -o yaml
+  > apiVersion: v1
+  > data:
+  >  mms-secrets: ewogICJ3YXRzb24iOgogIHsKICAgICJ1cmwiOiAiaHR0cHM6Ly9nYXRld2F5LndhdHNvbnBsYXRmb3JtLm5ldC92aXN1YWwtcmVjb2duaXRpb24vYXBpIiwKICAgICJub3RlIjogIkl0IG1heSB0YWtlIHVwIHRvIDUgbWludXRlcyBmb3IgdGhpcyBrZXkgdG8gYmVjb21lIGFjdGl2ZSIsCiAgICAiYXBpX2tleSI6ICJ5cGtQNDhScUhfci1NMTdPRm4xV0p5bEtzVXZnNnc1RFFwOXBlMy1fMWRfSSIgCiAgfQp9Cg==
+  > kind: Secret
+  > metadata:
+  >   creationTimestamp: 2019-02-14T10:29:03Z
+  >   name: mms-secret
+  >   namespace: default
+  >   resourceVersion: "34546"
+  >   selfLink: /api/v1/namespaces/default/secrets/mms-secret
+  >   uid: 59cbcc9e-3043-11e9-9576-227f65586521
+  > type: Opaque
+  > ```
+  > 
+  > `data.mms-secrets:` にAPI Keyの情報が含まれています。Base64でエンコードされるため機密性を高く保つことができます。
+  > 
+  > 
+  >補足2:  
+  > 外部サービスを呼び出すためにはAPI KeyやユーザID/パスワードが必要となりますが，これらの情報はアプリケーションとは切り離して別の設定ファイルとして管理することが推奨されています。例えば，アプリケーションコードと一緒に機密性の高い情報をGitレポジトリ上に置くことが推奨されないことは理解しやすいかと思います。他にも管理負荷を下げるためにも分離した方が良いとされています。
+  > 
+  > ちなみに、Kubernetesで認証情報など設定系の情報を管理する方法としては`ConfigMap`や`Secret`を使用する方法があります。API Keyのような機密性の高い情報は`Secret`を使用することが推奨されています。ConfigMapとして生成した場合は暗号化されず平文のまま値が格納されてしまうためです。
+  > 
+  > 
+  >補足3:  
+  > IBM Cloud CLIを使ったSecretの生成
+  > 
+  > IBM Cloudでは、KubernetesクラスターとIBM Cloudのサービスの接続を容易にするためのコマンド`ibmcloud ks cluster-service-bind`が用意されています。この方法でも`Secret`を作成できます。詳しくは[こちら](https://cloud.ibm.com/docs/containers/cs_integrations.html#adding_cluster)を参照してください。 
+
+
+## 3) `MMSSearch`アプリケーションのデプロイ
+
+7. Helm チャートを使用してMMSSearchアプリケーションをデプロイします。
+
+  `helm install`コマンドを使用します。
+  
+  MMSSearchのDeployment/Serviceなどを作成するHelmチャートは，`jpetstore-kubernetes-compact/helm`ディレクトリに準備しています。
+  
+  実行例:
+  
+  ```bash
+  helmディレクトリー移動 (jpetstore-kubernetes-compact/helm)
+  $ cd helm
+
+  MMSSearchアプリのデプロイ
+  $ helm install mmssearch ./mmssearch/
+  ```
+
+  >補足1:  
+  > Podのステータスを確認してみます。
+  > 
+  > ```bash
+  > $ kubectl get pod -l app=mmssearch-mmssearch
+  > NAME                                   READY   STATUS    RESTARTS   AGE
+  > mmssearch-mmssearch-55b789857d-k8mwn   1/1     Running   0          2m
+  > ```
+  >
+  > さらに`jpetstoreアプリ`と`mmssearchアプリ`に関連するKubernetesリソースをまとめて確認してみましょう。
+  > 
+  > ```bash
+  > kubectl get all
+  > NAME                                                     READY   STATUS    RESTARTS   AGE
+  > pod/jpetstore-modernpets-jpetstoredb-7dd76668b5-crtql    1/1     Running   0          8m
+  > pod/jpetstore-modernpets-jpetstoreweb-6d49474455-6j2j2   1/1     Running   0          8m
+  > pod/jpetstore-modernpets-jpetstoreweb-6d49474455-tjc6g   1/1     Running   0          8m
+  > pod/mmssearch-mmssearch-55b789857d-k8mwn                 1/1     Running   0          4m
+  > 
+  > NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+  > service/db           ClusterIP   172.21.240.192   <none>        3306/TCP         8m
+  > service/kubernetes   ClusterIP   172.21.0.1       <none>        443/TCP          1d
+  > service/mmssearch    NodePort    172.21.19.130    <none>        8080:31417/TCP   4m
+  > service/web          NodePort    172.21.214.98    <none>        80:32025/TCP     8m
+  > 
+  > NAME                                                DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+  > deployment.apps/jpetstore-modernpets-jpetstoredb    1         1         1            1           8m
+  > deployment.apps/jpetstore-modernpets-jpetstoreweb   2         2         2            2           8m
+  > deployment.apps/mmssearch-mmssearch                 1         1         1            1           4m
+  > 
+  > NAME                                                           DESIRED   CURRENT   READY   AGE
+  > replicaset.apps/jpetstore-modernpets-jpetstoredb-7dd76668b5    1         1         1       8m
+  > replicaset.apps/jpetstore-modernpets-jpetstoreweb-6d49474455   2         2         2       8m
+  > replicaset.apps/mmssearch-mmssearch-55b789857d                 1         1         1       4m
+  
+  以上でMMSSearchアプリがデプロイされました。
+
+
+  >補足2:  
+  > yamlファイルを使用してデプロイする場合は以下のようになります。(**今回は実施しません**)
+  > 
+  > ```bash
+  > #jpetstore-kubernetes-compact/jpetstore ディレクトリに移動
+  > $ cd jpetstore
+  > $ kubectl apply -f jpetstore-watson.yaml
+  > service "mmssearch" created
+  > deployment.extensions "mmssearch" created
+  > ```
+
+## 動作確認
+
+8. ブラウザ上でアプリケーションの動作を確認します。
+
+    ブラウザで`<Public IP>:<NodePort>`を開きます。
+    
+    >補足:  
+    > ワーカーノードの `Public IP` は以下のように確認します。
+    > 
+    > ```bash
+    > $ ibmcloud ks workers mycluster
+    > OK
+    > ID                                                 Public IP       Private IP      Machine Type   State    Status   Zone    Version
+    > kube-hou02-pa705552a5a95d4bf3988c678b438ea9ec-w1   184.173.52.92   10.76.217.175   free           normal   Ready    hou02   1.10.12_1543
+    > ```
+    > `NodePort` は以下のように確認します。
+    > 
+    > ```bash
+    > $ kubectl get service mmssearch
+    > NAME        TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+    > mmssearch   NodePort   172.21.19.130   <none>        8080:31417/TCP   19m
+    > ```
+    > 
+    > 上記の出力例の場合の `<Public IP>:<NodePort>`は，次のようになります。
+    > 
+    > - Public IP: `184.173.52.92`
+    > - NodePort: `31417`
+    > 
+    > したがって，ブラウザ上で `184.173.52.92:31417` にアクセスするとアプリケーションが開きます。
+
+
+    ブラウザで`<クラスターのPublic IP>:<ポート>`にアクセスしてください。
+    
+    `jpetstore-kubernetes-compact/pet-images`ディレクトリにある動物の画像をアップロードすると，Watson Visual Recognitionによる画像認識が行われ，認識した結果（動物の種類）が`JpetStore`データベースに登録されている動物かどうかが返ってきます。
+
+   ![](images/webchat.png)
+
+以上でコンテナアプリケーションとWatson APIを連携させる操作は完了です。
+
+最後に， **Lab5で作成したK8sリソースを以下のコマンドで削除** します。
+
+  ```bash
+  1) Lab4, 5でデプロイした2つのアプリを削除します。
+  $ helm uninstall jpetstore
+  $ helm uninstall mmssearch
+  
+  2) クラスターに保存されているSecretを削除します。
+  $ kubectl delete secret mms-secret
+  ```
+  
+次のハンズオンはこちら [Lab6](../Lab6/README.md) です。
+
+*******
+
+### 参考: Kubernetes上のアプリケーションから外部サービスを呼び出すためのマニフェストファイルの設定について
+
+実際にアプリケーションから読み出す方法は`Secret`を**Volumeとしてマウント**する方法と，**環境変数として参照**する方法があります。
+`MMSSearch`では以下のようにVolumeとしてマウントする方法で実装されています。
+
+```yaml
+    #中略
+    spec:
+        volumeMounts:
+         - name: service-secrets
+           mountPath: "/etc/secrets"
+           readOnly: true
+      volumes:
+      - name: service-secrets
+        secret:
+          secretName: mms-secret
+          items:
+          - key: mms-secrets
+            path: mms-secrets.json
+```
+
+>mms-secretという名前のsecret(`secretName: mms-secret`)が`/etc/secret`に`mms-secrets.json`としてマウントされます。アプリケーションはこのファイル経由でsecretを参照します。
